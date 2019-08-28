@@ -18,18 +18,24 @@ include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 include ${PETSC_DIR}/lib/petsc/conf/test
 
-# Compiler=mpiicpc
+Compiler=mpiicpc
 # Compiler=pgcc
-Compiler=mpiicc
+# Compiler=mpiicc
 CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX} -Wall
 #-D_GLIBCXX_USE_CXX11_ABI=0
 all: main
 
-main: ex5opt_ic.o
-	$(Compiler) ex5opt_ic.o -o main ${PETSC_LIB} $(CFLAGS)
+# main: ex5opt_ic.o
+# 	$(Compiler) ex5opt_ic.o -o main ${PETSC_LIB} $(CFLAGS)
 
-ex5opt_ic.o: ex5opt_ic.c
-	$(Compiler)	-c ex5opt_ic.c $(CFLAGS)
+# ex5opt_ic.o: ex5opt_ic.c
+# 	$(Compiler)	-c ex5opt_ic.c $(CFLAGS)
+
+main: test.o
+	$(Compiler) test.o -o main ${PETSC_LIB} $(CFLAGS)
+
+ex5opt_ic.o: test.cpp
+	$(Compiler)	-c test.cpp $(CFLAGS)
 
 # clean:
 # 	rm *o

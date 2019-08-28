@@ -1,0 +1,65 @@
+Mat Object: 2 MPI processes
+  type: nest
+  Matrix object: 
+    type=nest, rows=2, cols=2 
+    MatNest structure: 
+    (0,0) : type=nest, rows=810, cols=810 
+      Mat Object: 2 MPI processes
+        type: nest
+        Matrix object: 
+          type=nest, rows=3, cols=3 
+          MatNest structure: 
+          (0,0) : type=mpiaij, rows=315, cols=315 
+          (0,1) : type=mpiaij, rows=315, cols=180 
+          (0,2) : type=mpiaij, rows=315, cols=315 
+          (1,0) : type=mpiaij, rows=180, cols=315 
+          (1,1) : type=mpiaij, rows=180, cols=180 
+          (1,2) : type=mpiaij, rows=180, cols=315 
+          (2,0) : type=mpiaij, rows=315, cols=315 
+          (2,1) : type=mpiaij, rows=315, cols=180 
+          (2,2) : type=mpiaij, rows=315, cols=315 
+    (0,1) : type=nest, rows=810, cols=810 
+      Mat Object: 2 MPI processes
+        type: nest
+        Matrix object: 
+          type=nest, rows=3, cols=3 
+          MatNest structure: 
+          (0,0) : type=mpiaij, rows=315, cols=315 
+          (0,1) : type=mpiaij, rows=315, cols=180 
+          (0,2) : type=mpiaij, rows=315, cols=315 
+          (1,0) : type=mpiaij, rows=180, cols=315 
+          (1,1) : type=mpiaij, rows=180, cols=180 
+          (1,2) : type=mpiaij, rows=180, cols=315 
+          (2,0) : type=mpiaij, rows=315, cols=315 
+          (2,1) : type=mpiaij, rows=315, cols=180 
+          (2,2) : type=mpiaij, rows=315, cols=315 
+    (1,0) : type=nest, rows=810, cols=810 
+      Mat Object: 2 MPI processes
+        type: nest
+        Matrix object: 
+          type=nest, rows=3, cols=3 
+          MatNest structure: 
+          (0,0) : type=mpiaij, rows=315, cols=315 
+          (0,1) : type=mpiaij, rows=315, cols=180 
+          (0,2) : type=mpiaij, rows=315, cols=315 
+          (1,0) : type=mpiaij, rows=180, cols=315 
+          (1,1) : type=mpiaij, rows=180, cols=180 
+          (1,2) : type=mpiaij, rows=180, cols=315 
+          (2,0) : type=mpiaij, rows=315, cols=315 
+          (2,1) : type=mpiaij, rows=315, cols=180 
+          (2,2) : type=mpiaij, rows=315, cols=315 
+    (1,1) : type=nest, rows=810, cols=810 
+      Mat Object: 2 MPI processes
+        type: nest
+        Matrix object: 
+          type=nest, rows=3, cols=3 
+          MatNest structure: 
+          (0,0) : type=mpiaij, rows=315, cols=315 
+          (0,1) : type=mpiaij, rows=315, cols=180 
+          (0,2) : type=mpiaij, rows=315, cols=315 
+          (1,0) : type=mpiaij, rows=180, cols=315 
+          (1,1) : type=mpiaij, rows=180, cols=180 
+          (1,2) : type=mpiaij, rows=180, cols=315 
+          (2,0) : type=mpiaij, rows=315, cols=315 
+          (2,1) : type=mpiaij, rows=315, cols=180 
+          (2,2) : type=mpiaij, rows=315, cols=315 

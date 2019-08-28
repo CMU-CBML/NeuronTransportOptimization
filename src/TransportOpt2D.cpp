@@ -65,10 +65,14 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 	int add(0);
 
 	string fname_cmat = fn + "cmat.txt";
+
+	cout << fname_cmat <<endl;
+
 	ifstream fin_cmat;
 	fin_cmat.open(fname_cmat);
 	if (fin_cmat.is_open())	{
 		fin_cmat >> neles;
+		cout << neles << endl;
 		bzmesh_process.resize(ele_process.size());
 		for (int i = 0; i<neles; i++){
 			if (i == ele_process[add]){
@@ -78,7 +82,7 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 				for (int j = 0; j < nfunctions; j++)
 					fin_cmat >> bzmesh_process[add].IEN[j];
 				for (int j = 0; j < nfunctions; j++){
-					for (int k = 0; k < 64; k++){
+					for (int k = 0; k < 16; k++){
 						fin_cmat >> bzmesh_process[add].cmat[j][k];
 					}
 				}
@@ -89,7 +93,7 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 				for (int j = 0; j < nfunctions; j++)
 					fin_cmat >> stmp;
 				for (int j = 0; j < nfunctions; j++)
-					for (int k = 0; k < 64; k++)
+					for (int k = 0; k < 16; k++)
 						fin_cmat >> stmp;
 			}
 		}
@@ -103,9 +107,11 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 	string fname_bzpt = fn + "bzpt.txt";
 	ifstream fin_bzpt;
 	fin_bzpt.open(fname_bzpt);
+	cout << fname_bzpt <<endl;
 	add = 0;
 	if (fin_bzpt.is_open()){
 		fin_bzpt >> npts;
+		cout << npts << endl;
 		getline(fin_bzpt, stmp);
 		for (int e = 0; e < neles; e++)	{
 			if (e == ele_process[add]){
@@ -187,91 +193,129 @@ void TransportOpt2D::InitializeProblem(const int ndof, const int n_bz, const vec
 	/*Initialize parameters*/
 	GaussInfo(4);
 	n_bzmesh = n_bz;
-	Vel.resize(ndof * 3);
-	Pre.resize(ndof);
-	Vel = Vel0;
-	Pre = Pre0;
-	if (var.size() != 0)
+
+	// Scale of the problem
+	nPoint = ndof;	
+
+	// constant parameters
+	alpha1 = var[9];
+	alpha2 = var[10];
+	beta1 = var[11];
+	beta2 = var[12];
+	dt = var[13];
+	nTstep = var[14];
+	par = var;//Dn0, v_plus, v_minus, k+, k-,k'+,k'-
+
+	// state variables
+	n0.resize(nPoint * nTstep);
+	n_plus.resize(nPoint * nTstep);
+	n_minus.resize(nPoint * nTstep);
+	for(int i = 0; i < dim; i++)
 	{
-		nu = 0.1;
-		rou = 0.5;
-		alphaM = 0.5*(3 - rou) / (1 + rou);
-		alphaF = 1 / (1 + rou);
-		Gama = 0.5 + alphaM - alphaF;
-		velocity_max = var[1];
+		Vel_plus[i].resize(nPoint * nTstep);
+		Vel_minus[i].resize(nPoint * nTstep);
 	}
-	else
+	// control variables
+	for(int i = 0; i < dim; i++)
 	{
-		cerr << "0 variables!\n"; getchar();
+		f_plus[i].resize(nPoint * nTstep);
+		f_minus[i].resize(nPoint * nTstep);
 	}
-	fx = 0;
-	fy = 0;
-	fz = 0;
+
+	// penalty variables
+	for(int i = 0; i < 3 + 2 * dim; i++)
+		lambda[i].resize(nPoint * nTstep);
+
+	cout << "nPoint: "<< ndof << endl;
+	cout << "nTstep: "<< nTstep << endl;
 
 	/*Initialize petsc vector, matrix*/
-	PetscInt mat_dim = ndof * 4;
-	ierr = MatCreate(PETSC_COMM_WORLD, &GK); 
-	ierr = MatSetSizes(GK, PETSC_DECIDE, PETSC_DECIDE, mat_dim, mat_dim);
-	ierr = MatSetType(GK, MATMPIAIJ);
-	ierr = MatMPIAIJSetPreallocation(GK, 500, NULL, 500, NULL);
-	MatGetOwnershipRange(GK, &rstart, &rend);		
-	ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
-	ierr = MatSetUp(GK); 
-	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &GR);
-	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &temp_solution);
+
+	ierr = MatCreate(PETSC_COMM_WORLD, &M); 
+	ierr = MatSetSizes(M, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
+	ierr = MatSetType(M, MATMPIAIJ);
+	ierr = MatMPIAIJSetPreallocation(M, 100, NULL, 100, NULL);
+	ierr = MatSetUp(M); 
+
+	ierr = MatCreate(PETSC_COMM_WORLD, &K); 
+	ierr = MatSetSizes(K, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
+	ierr = MatSetType(K, MATMPIAIJ);
+	ierr = MatMPIAIJSetPreallocation(K, 100, NULL, 100, NULL);
+	ierr = MatSetUp(K); 
+
+	ierr = MatCreate(PETSC_COMM_WORLD, &P[0]); 
+	ierr = MatSetSizes(P[0], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
+	ierr = MatSetType(P[0], MATMPIAIJ);
+	ierr = MatMPIAIJSetPreallocation(P[0], 100, NULL, 100, NULL);	
+	ierr = MatSetUp(P[0]); 
+
+	ierr = MatCreate(PETSC_COMM_WORLD, &P[1]); 
+	ierr = MatSetSizes(P[1], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
+	ierr = MatSetType(P[1], MATMPIAIJ);
+	ierr = MatMPIAIJSetPreallocation(P[1], 100, NULL, 100, NULL);
+	ierr = MatSetUp(P[1]); 
+
+	// ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
+	// ierr = MatSetUp(GK); 
+	// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &GR);
+	// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &temp_solution);
 }
 
 /// Need to pay attention that basis function right now is computed for iga using Bezier element definition
-void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<array<double, 2>>& pt, const vector<array<double, 16>> &cmat, vector<double> &Nx, vector<array<double, 2>> &dNdx, vector<array<array<double, 2>, 2>> &dN2dx2, double dudx[2][2], double& detJ)
+void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<array<double, dim>> &pt, const vector<array<double, bzpt_num>> &cmat, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, double dudx[dim][dim], double &detJ)
 {
-	double Nu[4] = { (1. - u)*(1. - u)*(1. - u), 3.*(1. - u)*(1. - u)*u, 3.*(1. - u)*u*u, u*u*u };
-	double Nv[4] = { (1. - v)*(1. - v)*(1. - v), 3.*(1. - v)*(1. - v)*v, 3.*(1. - v)*v*v, v*v*v };
+	double Nu[4] = {(1. - u) * (1. - u) * (1. - u), 3. * (1. - u) * (1. - u) * u, 3. * (1. - u) * u * u, u * u * u};
+	double Nv[4] = {(1. - v) * (1. - v) * (1. - v), 3. * (1. - v) * (1. - v) * v, 3. * (1. - v) * v * v, v * v * v};
 
-	double dNdu[4] = { -3.*(1. - u)*(1. - u), 3. - 12.*u + 9.*u*u, 3.*(2. - 3.*u)*u, 3.*u*u };
-	double dNdv[4] = { -3.*(1. - v)*(1. - v), 3. - 12.*v + 9.*v*v, 3.*(2. - 3.*v)*v, 3.*v*v };
-	
-	double dN2du2[4] = { 6.*(1. - u),-12. + 18.*u,6. - 18.*u,6.*u };
-	double dN2dv2[4] = { 6.*(1. - v),-12. + 18.*v,6. - 18.*v,6.*v };
+	double dNdu[4] = {-3. * (1. - u) * (1. - u), 3. - 12. * u + 9. * u * u, 3. * (2. - 3. * u) * u, 3. * u * u};
+	double dNdv[4] = {-3. * (1. - v) * (1. - v), 3. - 12. * v + 9. * v * v, 3. * (2. - 3. * v) * v, 3. * v * v};
 
-	double dNdt[bzpt_num][3];
-	double dN2dt2[bzpt_num][3][3];
+	double dN2du2[4] = {6. * (1. - u), -12. + 18. * u, 6. - 18. * u, 6. * u};
+	double dN2dv2[4] = {6. * (1. - v), -12. + 18. * v, 6. - 18. * v, 6. * v};
+
+	double dNdt[bzpt_num][dim];
+	double dN2dt2[bzpt_num][dim][dim];
 	double Nx_bz[bzpt_num];
-	double dNdx_bz[bzpt_num][3];
-	double dN2dx2_bz[bzpt_num][3][3];
+	double dNdx_bz[bzpt_num][dim];
+	double dN2dx2_bz[bzpt_num][dim][dim];
 
 	Nx.clear();
 	dNdx.clear();
 	dN2dx2.clear();
 	Nx.resize(nen, 0);
-	dNdx.resize(nen, { 0 });
-	dN2dx2.resize(nen, { {0} });
+	dNdx.resize(nen, {0});
+	dN2dx2.resize(nen, {{0}});
 
 	int i, j, k, a, b, c, loc;
 	loc = 0;
 
-	for (j = 0; j<4; j++){
-		for (k = 0; k < 4; k++)	{
+	for (j = 0; j < 4; j++)
+	{
+		for (k = 0; k < 4; k++)
+		{
 			Nx_bz[loc] = Nu[k] * Nv[j];
 			dNdt[loc][0] = dNdu[k] * Nv[j];
 			dNdt[loc][1] = Nu[k] * dNdv[j];
-			dN2dt2[loc][0][0] = dN2du2[k] * Nv[j];				dN2dt2[loc][0][1] = dNdu[k] * dNdv[j];
-			dN2dt2[loc][1][0] = dNdu[k] * dNdv[j];				dN2dt2[loc][1][1] = Nu[k] * dN2dv2[j];
+			dN2dt2[loc][0][0] = dN2du2[k] * Nv[j];
+			dN2dt2[loc][0][1] = dNdu[k] * dNdv[j];
+			dN2dt2[loc][1][0] = dNdu[k] * dNdv[j];
+			dN2dt2[loc][1][1] = Nu[k] * dN2dv2[j];
 			loc++;
 		}
 	}
 
-
-	double dxdt[2][2] = { {0} };
+	double dxdt[2][2] = {{0}};
 	for (loc = 0; loc < bzpt_num; loc++)
-		for (a = 0; a<2; a++)	
-			for (b = 0; b<2; b++)
- 				dxdt[a][b] += pt[loc][a] * dNdt[loc][b];
+		for (a = 0; a < 2; a++)
+			for (b = 0; b < 2; b++)
+				dxdt[a][b] += pt[loc][a] * dNdt[loc][b];
 
-	double dtdx[2][2] = { { 0 } };
+	double dtdx[2][2] = {{0}};
 	Matrix2DInverse(dxdt, dtdx);
 
 	//1st derivatives
-	for (i = 0; i<bzpt_num; i++){
+	for (i = 0; i < bzpt_num; i++)
+	{
 		dNdx_bz[i][0] = dNdt[i][0] * dtdx[0][0] + dNdt[i][1] * dtdx[1][0];
 		dNdx_bz[i][1] = dNdt[i][0] * dtdx[0][1] + dNdt[i][1] * dtdx[1][1];
 	}
@@ -280,16 +324,16 @@ void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<arr
 			dudx[i][j] = dtdx[i][j];
 
 	detJ = MatrixDet(dxdt);
-	detJ = 0.25*detJ;
+	detJ = 0.25 * detJ;
 
 	//2nd derivatives
-	double dx2dt2[2][4] = { {0} };
-	double dt2dx2[2][4] = { {0} };
-	for (int l = 0; l < 2; l++)	
-		for (loc = 0; loc<bzpt_num; loc++)
-			for (a = 0; a<2; a++)
-				for (b = 0; b<2; b++)
-					dx2dt2[l][2*a+b] += pt[loc][l] * dN2dt2[loc][a][b];
+	double dx2dt2[2][4] = {{0}};
+	double dt2dx2[2][4] = {{0}};
+	for (int l = 0; l < 2; l++)
+		for (loc = 0; loc < bzpt_num; loc++)
+			for (a = 0; a < 2; a++)
+				for (b = 0; b < 2; b++)
+					dx2dt2[l][2 * a + b] += pt[loc][l] * dN2dt2[loc][a][b];
 
 	for (i = 0; i < 2; i++)
 		for (j = 0; j < 2; j++)
@@ -297,40 +341,46 @@ void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<arr
 				for (a = 0; a < 2; a++)
 					for (b = 0; b < 2; b++)
 						for (c = 0; c < 2; c++)
-							dt2dx2[c][2*i+j] -= dx2dt2[k][2*a+b]*dtdx[a][i]*dtdx[b][j]*dtdx[c][k];
+							dt2dx2[c][2 * i + j] -= dx2dt2[k][2 * a + b] * dtdx[a][i] * dtdx[b][j] * dtdx[c][k];
 
-
-	
 	for (loc = 0; loc < bzpt_num; loc++)
 		for (i = 0; i < 2; i++)
 			for (j = 0; j < 2; j++)
 				dN2dx2_bz[loc][i][j] = 0.;
 
-	for (loc = 0; loc < bzpt_num; loc++){
-		for (i = 0; i < 2; i++)	{
-			for (j = 0; j < 2; j++)	{
-				for (a = 0; a<2; a++){
-					for (b = 0; b<2; b++){
-						dN2dx2_bz[loc][i][j] += dN2dt2[loc][a][b] * dtdx[a][i]*dtdx[b][j];
+	for (loc = 0; loc < bzpt_num; loc++)
+	{
+		for (i = 0; i < 2; i++)
+		{
+			for (j = 0; j < 2; j++)
+			{
+				for (a = 0; a < 2; a++)
+				{
+					for (b = 0; b < 2; b++)
+					{
+						dN2dx2_bz[loc][i][j] += dN2dt2[loc][a][b] * dtdx[a][i] * dtdx[b][j];
 					}
-					dN2dx2_bz[loc][i][j] += dNdt[loc][a] * dt2dx2[a][2*i+j];
-				}
-			}
-		}
-	}
-	
-	for (i = 0; i < nen; i++){
-		for (j = 0; j < bzpt_num; j++)	{
-			Nx[i] += cmat[i][j] * Nx_bz[j];
-			for (int m = 0; m < 2; m++)	{
-				dNdx[i][m] += cmat[i][j] * dNdx_bz[j][m];
-				for (int n = 0; n < 2; n++)	{
-					dN2dx2[i][m][n] += cmat[i][j] * dN2dx2_bz[j][m][n];
+					dN2dx2_bz[loc][i][j] += dNdt[loc][a] * dt2dx2[a][2 * i + j];
 				}
 			}
 		}
 	}
 
+	for (i = 0; i < nen; i++)
+	{
+		for (j = 0; j < bzpt_num; j++)
+		{
+			Nx[i] += cmat[i][j] * Nx_bz[j];
+			for (int m = 0; m < 2; m++)
+			{
+				dNdx[i][m] += cmat[i][j] * dNdx_bz[j][m];
+				for (int n = 0; n < 2; n++)
+				{
+					dN2dx2[i][m][n] += cmat[i][j] * dN2dx2_bz[j][m][n];
+				}
+			}
+		}
+	}
 }
 
 // For 3D
@@ -448,302 +498,734 @@ void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<arr
 // 			}
 // 		}
 // 	}
+// }
+
+void TransportOpt2D::PointFormValue(vector<double> &Nx, const vector<double> &U, double Value)
+{
+	Value = 0.;
+	for (int j = 0; j < Nx.size(); j++)
+		Value += U[j] * Nx[j];
+}
+
+void TransportOpt2D::PointFormGrad(vector<array<double, dim>>& dNdx, const vector<double> &U, double Value[dim])
+{
+	for (int j = 0; j < dim; j++)	
+		Value[j] = 0.;
+
+		for (int j = 0; j < dim; j++)	
+			for (int k = 0; k < dNdx.size(); k++) 
+				Value[j] += U[k] * dNdx[k][j];
+}
+
+void TransportOpt2D::PointFormHess(vector<array<array<double, dim>, dim>>& d2Ndx2, const vector<double> &U, double Value[dim][dim])
+{
+
+	for (int j = 0; j < dim; j++)	{
+		for (int k = 0; k < dim; k++)	{
+			Value[j][k] = 0.;
+		}
+	}
+
+	for (int j = 0; j < dim; j++)	{
+		for (int k = 0; k < dim; k++)	{
+			for (int l = 0; l < d2Ndx2.size(); l++)	{
+				Value[j][k] += U[l] * d2Ndx2[l][j][k];
+			}
+		}
+	}
+
+}
+
+// void TransportOpt2D::Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re)
+// {
+// 	/*calculate residual of the equation*/
+// 	double U_t[4], UU[4];
+// 	double grad_U[4][3];
+// 	double der2_U[4][3][3];
+
+// 	PointFormValue(Nx, U, UU);
+// 	PointFormGrad(dNdx, U, grad_U);
+// 	PointFormHess(dN2dx2, U, der2_U);
+
+// 	double u[3] = { UU[0],UU[1],UU[2] };
+// 	double u_x[3] = { grad_U[0][0],grad_U[1][0],grad_U[2][0] };
+// 	double u_y[3] = { grad_U[0][1],grad_U[1][1],grad_U[2][1] };
+// 	double u_z[3] = { grad_U[0][2],grad_U[1][2],grad_U[2][2] };
+// 	double u_xx[3] = { der2_U[0][0][0],der2_U[1][0][0],der2_U[2][0][0] };
+// 	double u_yy[3] = { der2_U[0][1][1],der2_U[1][1][1],der2_U[2][1][1] };
+// 	double u_zz[3] = { der2_U[0][2][2],der2_U[1][2][2],der2_U[2][2][2] };
+// 	double p = UU[3];
+// 	double p_x = grad_U[3][0], p_y = grad_U[3][1], p_z = grad_U[3][2];
+
+
+// 	double InvGradMap[3][3];
+// 	for (int i = 0; i < 3; i++) {
+// 		for (int j = 0; j < 3; j++) {
+// 			InvGradMap[i][j] = dudx[i][j];
+// 		}
+// 	}
+
+// 	double tauM, tauC;
+// 	Tau(InvGradMap, UU, tauM, tauC);
+// 	double u_s[3], p_s;
+// 	FineScale(tauM, tauC, u, u_x, u_y, u_z, u_xx, u_yy, u_zz, p, p_x, p_y, p_z, u_s, p_s);
+
+// 	int a, nen = Nx.size();
+// 	for (a = 0; a<nen; a++) {
+// 		double Na = Nx[a];
+// 		double Na_x = dNdx[a][0];
+// 		double Na_y = dNdx[a][1];
+// 		double Na_z = dNdx[a][2];
+		
+// 		double Rux, Ruy, Ruz, Rp;
+		
+// 		Rux = -Na*fx;
+// 		Ruy = -Na*fy;
+// 		Ruz = -Na*fz;
+// 		Rp = 0.0;
+		
+// 		Rux += - Na_x*p + nu*(Na_x*(u_x[0] + u_x[0]) + Na_y*(u_y[0] + u_x[1]) + Na_z*(u_z[0] + u_x[2]));
+// 		Ruy += - Na_y*p + nu*(Na_x*(u_x[1] + u_y[0]) + Na_y*(u_y[1] + u_y[1]) + Na_z*(u_z[1] + u_y[2]));
+// 		Ruz += - Na_z*p + nu*(Na_x*(u_x[2] + u_z[0]) + Na_y*(u_y[2] + u_z[1]) + Na_z*(u_z[2] + u_z[2]));
+// 		Rp += Na*(u_x[0] + u_y[1] + u_z[2]);
+		
+// 		Rux += -(Na_x*p_s);
+// 		Ruy += -(Na_y*p_s);
+// 		Ruz += -(Na_z*p_s);
+// 		Rp += -(Na_x*u_s[0] + Na_y*u_s[1] + Na_z*u_s[2]);
+		
+// 		Rux += +Na * ((u[0] + u_s[0])*u_x[0] + (u[1] + u_s[1])*u_y[0] + (u[2] + u_s[2])*u_z[0]);
+// 		Ruy += +Na * ((u[0] + u_s[0])*u_x[1] + (u[1] + u_s[1])*u_y[1] + (u[2] + u_s[2])*u_z[1]);
+// 		Ruz += +Na * ((u[0] + u_s[0])*u_x[2] + (u[1] + u_s[1])*u_y[2] + (u[2] + u_s[2])*u_z[2]);
+		
+// 		Rux += -(Na_x*u_s[0] * (u[0] + u_s[0]) + Na_y*u_s[0] * (u[1] + u_s[1]) + Na_z*u_s[0] * (u[2] + u_s[2]));
+// 		Ruy += -(Na_x*u_s[1] * (u[0] + u_s[0]) + Na_y*u_s[1] * (u[1] + u_s[1]) + Na_z*u_s[1] * (u[2] + u_s[2]));
+// 		Ruz += -(Na_x*u_s[2] * (u[0] + u_s[0]) + Na_y*u_s[2] * (u[1] + u_s[1]) + Na_z*u_s[2] * (u[2] + u_s[2]));
+		
+// 		Re[a][0] += Rux * detJ;
+// 		Re[a][1] += Ruy * detJ;
+// 		Re[a][2] += Ruz * detJ;
+// 		Re[a][3] += Rp  * detJ;
+// 	}
 
 // }
 
-void TransportOpt2D::PointFormValue(vector<double> &Nx, const vector<array<double, 4>> &U, double Value[4])
-{
-	for (int i = 0; i < 4; i++)
-		Value[i] = 0;
+// void TransportOpt2D::Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke)
+// {
+// 	/*calculate tangent matrix*/
+// 	double u[4];
+// 	PointFormValue(Nx, U, u);
+// 	double ux = u[0];
+// 	double uy = u[1];
+// 	double uz = u[2];
 
-	for (int i = 0; i < 4; i++)
-		for (int j = 0; j < Nx.size(); j++)
-			Value[i] += U[j][i] * Nx[j];
-}
+// 	double InvGradMap[3][3];
+// 	for (int i = 0; i < 3; i++){
+// 		for (int j = 0; j < 3; j++){
+// 			InvGradMap[i][j] = dudx[i][j];
+// 		}
+// 	}
 
-void TransportOpt2D::PointFormGrad(vector<array<double, 3>>& dNdx, const vector<array<double, 4>> &U, double Value[4][3])
-{
-	for (int i = 0; i < 4; i++)	
-		for (int j = 0; j < 3; j++)	
-			Value[i][j] = 0.;
-
-	for (int i = 0; i < 4; i++) 
-		for (int j = 0; j < 3; j++)	
-			for (int k = 0; k < dNdx.size(); k++) 
-				Value[i][j] += U[k][i] * dNdx[k][j];
-}
-
-void TransportOpt2D::PointFormHess(vector<array<array<double, 3>, 3>>& d2Ndx2, const vector<array<double, 4>> &U, double Value[4][3][3])
-{
-	for (int i = 0; i < 4; i++)	{
-		for (int j = 0; j < 3; j++)	{
-			for (int k = 0; k < 3; k++)	{
-				Value[i][j][k] = 0.;
-			}
-		}
-	}
-	for (int i = 0; i < 4; i++)	{
-		for (int j = 0; j < 3; j++)	{
-			for (int k = 0; k < 3; k++)	{
-				for (int l = 0; l < d2Ndx2.size(); l++)	{
-					Value[i][j][k] += U[l][i] * d2Ndx2[l][j][k];
-				}
-			}
-		}
-	}
-}
-
-void TransportOpt2D::Tau(double J[3][3], double u[4], double &tauM, double &tauC) 
-{
-	/*calculate stabilization parameter*/
-	double C_I = 1.0 / 12.0;
-
-	int i, j, k;
-
-	double G[3][3] = { { 0 } };
-	for (i = 0; i<3; i++)
-		for (j = 0; j<3; j++)
-			for (k = 0; k<3; k++)
-				G[i][j] += J[k][i] * J[k][j];
-
-	double g[3] = { 0 };
-	for (i = 0; i<3; i++)
-		for (j = 0; j<3; j++)
-			g[i] += J[j][i];
-
-	double G_G = 0;
-	for (i = 0; i<3; i++)
-		for (j = 0; j<3; j++)
-			G_G += G[i][j] * G[i][j];
-
-	double g_g = 0;
-	for (i = 0; i<3; i++)
-		g_g += g[i] * g[i];
-
-	double u_G_u = 0;
-	for (i = 0; i<3; i++)
-		for (j = 0; j<3; j++)
-			u_G_u += u[i] * G[i][j] * u[j];
-
-	
-	tauM = u_G_u + C_I * nu*nu * G_G;
-	tauM = 1 / sqrt(tauM);
-	
-	tauC = (tauM)* g_g;
-	tauC = 1 / (tauC);
-}
-
-void TransportOpt2D::FineScale(double tauM, double tauC, double u[3], double u_x[3], double u_y[3], double u_z[3], double u_xx[3], double u_yy[3], double u_zz[3], double p, double p_x, double p_y, double p_z, double u_s[3], double &p_s)
-{
-	/*calculate fine scale in VMS*/
-	u_s[0] = (u[0] * u_x[0] + u[1] * u_y[0] + u[2] * u_z[0]) + p_x - nu*(u_xx[0] + u_yy[0] + u_zz[0]) - fx;
-	u_s[1] = (u[0] * u_x[1] + u[1] * u_y[1] + u[2] * u_z[1]) + p_y - nu*(u_xx[1] + u_yy[1] + u_zz[1]) - fy;
-	u_s[2] = (u[0] * u_x[2] + u[1] * u_y[2] + u[2] * u_z[2]) + p_z - nu*(u_xx[2] + u_yy[2] + u_zz[2]) - fz;
-	
-	p_s = u_x[0] + u_y[1] + u_z[2];
-	
-	u_s[0] *= -tauM;
-	u_s[1] *= -tauM;
-	u_s[2] *= -tauM;
-	p_s *= -tauC;
-}
-
-void TransportOpt2D::Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re)
-{
-	/*calculate residual of the equation*/
-	double U_t[4], UU[4];
-	double grad_U[4][3];
-	double der2_U[4][3][3];
-
-	PointFormValue(Nx, U, UU);
-	PointFormGrad(dNdx, U, grad_U);
-	PointFormHess(dN2dx2, U, der2_U);
-
-	double u[3] = { UU[0],UU[1],UU[2] };
-	double u_x[3] = { grad_U[0][0],grad_U[1][0],grad_U[2][0] };
-	double u_y[3] = { grad_U[0][1],grad_U[1][1],grad_U[2][1] };
-	double u_z[3] = { grad_U[0][2],grad_U[1][2],grad_U[2][2] };
-	double u_xx[3] = { der2_U[0][0][0],der2_U[1][0][0],der2_U[2][0][0] };
-	double u_yy[3] = { der2_U[0][1][1],der2_U[1][1][1],der2_U[2][1][1] };
-	double u_zz[3] = { der2_U[0][2][2],der2_U[1][2][2],der2_U[2][2][2] };
-	double p = UU[3];
-	double p_x = grad_U[3][0], p_y = grad_U[3][1], p_z = grad_U[3][2];
-
-
-	double InvGradMap[3][3];
-	for (int i = 0; i < 3; i++) {
-		for (int j = 0; j < 3; j++) {
-			InvGradMap[i][j] = dudx[i][j];
-		}
-	}
-
-	double tauM, tauC;
-	Tau(InvGradMap, UU, tauM, tauC);
-	double u_s[3], p_s;
-	FineScale(tauM, tauC, u, u_x, u_y, u_z, u_xx, u_yy, u_zz, p, p_x, p_y, p_z, u_s, p_s);
-
-	int a, nen = Nx.size();
-	for (a = 0; a<nen; a++) {
-		double Na = Nx[a];
-		double Na_x = dNdx[a][0];
-		double Na_y = dNdx[a][1];
-		double Na_z = dNdx[a][2];
-		
-		double Rux, Ruy, Ruz, Rp;
-		
-		Rux = -Na*fx;
-		Ruy = -Na*fy;
-		Ruz = -Na*fz;
-		Rp = 0.0;
-		
-		Rux += - Na_x*p + nu*(Na_x*(u_x[0] + u_x[0]) + Na_y*(u_y[0] + u_x[1]) + Na_z*(u_z[0] + u_x[2]));
-		Ruy += - Na_y*p + nu*(Na_x*(u_x[1] + u_y[0]) + Na_y*(u_y[1] + u_y[1]) + Na_z*(u_z[1] + u_y[2]));
-		Ruz += - Na_z*p + nu*(Na_x*(u_x[2] + u_z[0]) + Na_y*(u_y[2] + u_z[1]) + Na_z*(u_z[2] + u_z[2]));
-		Rp += Na*(u_x[0] + u_y[1] + u_z[2]);
-		
-		Rux += -(Na_x*p_s);
-		Ruy += -(Na_y*p_s);
-		Ruz += -(Na_z*p_s);
-		Rp += -(Na_x*u_s[0] + Na_y*u_s[1] + Na_z*u_s[2]);
-		
-		Rux += +Na * ((u[0] + u_s[0])*u_x[0] + (u[1] + u_s[1])*u_y[0] + (u[2] + u_s[2])*u_z[0]);
-		Ruy += +Na * ((u[0] + u_s[0])*u_x[1] + (u[1] + u_s[1])*u_y[1] + (u[2] + u_s[2])*u_z[1]);
-		Ruz += +Na * ((u[0] + u_s[0])*u_x[2] + (u[1] + u_s[1])*u_y[2] + (u[2] + u_s[2])*u_z[2]);
-		
-		Rux += -(Na_x*u_s[0] * (u[0] + u_s[0]) + Na_y*u_s[0] * (u[1] + u_s[1]) + Na_z*u_s[0] * (u[2] + u_s[2]));
-		Ruy += -(Na_x*u_s[1] * (u[0] + u_s[0]) + Na_y*u_s[1] * (u[1] + u_s[1]) + Na_z*u_s[1] * (u[2] + u_s[2]));
-		Ruz += -(Na_x*u_s[2] * (u[0] + u_s[0]) + Na_y*u_s[2] * (u[1] + u_s[1]) + Na_z*u_s[2] * (u[2] + u_s[2]));
-		
-		Re[a][0] += Rux * detJ;
-		Re[a][1] += Ruy * detJ;
-		Re[a][2] += Ruz * detJ;
-		Re[a][3] += Rp  * detJ;
-	}
-
-}
-
-void TransportOpt2D::Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke)
-{
-	/*calculate tangent matrix*/
-	double u[4];
-	PointFormValue(Nx, U, u);
-	double ux = u[0];
-	double uy = u[1];
-	double uz = u[2];
-
-	double InvGradMap[3][3];
-	for (int i = 0; i < 3; i++){
-		for (int j = 0; j < 3; j++){
-			InvGradMap[i][j] = dudx[i][j];
-		}
-	}
-
-	double tauM, tauC;
-	Tau(InvGradMap, u, tauM, tauC);
-	int a, b, nen = Nx.size();
-	for (a = 0; a<nen; a++) {
-		double Na = Nx[a];
-		double Na_x = dNdx[a][0];
-		double Na_y = dNdx[a][1];
-		double Na_z = dNdx[a][2];
-		for (b = 0; b<nen; b++) {
-			double Nb = Nx[b];
-			double Nb_x = dNdx[b][0];
-			double Nb_y = dNdx[b][1];
-			double Nb_z = dNdx[b][2];
-			/* ----- */
-			int i, j;
-			double T[4][4];
-			double Tii =
-				(
-					+ Na * (ux * Nb_x + uy * Nb_y + uz * Nb_z)
-					+ nu * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z)
-					+ tauM * (ux * Na_x + uy * Na_y + uz * Na_z) *
-					/**/     ((ux * Nb_x + uy * Nb_y + uz * Nb_z))
-					);
-			T[0][0] = (+nu * Na_x * Nb_x + tauC * Na_x * Nb_x);
-			T[0][1] = (+nu * Na_y * Nb_x + tauC * Na_x * Nb_y);
-			T[0][2] = (+nu * Na_z * Nb_x + tauC * Na_x * Nb_z);
-			//			
-			T[1][0] = (+nu * Na_x * Nb_y + tauC * Na_y * Nb_x);
-			T[1][1] = (+nu * Na_y * Nb_y + tauC * Na_y * Nb_y);
-			T[1][2] = (+nu * Na_z * Nb_y + tauC * Na_y * Nb_z);
-			//			
-			T[2][0] = (+nu * Na_x * Nb_z + tauC * Na_z * Nb_x);
-			T[2][1] = (+nu * Na_y * Nb_z + tauC * Na_z * Nb_y);
-			T[2][2] = (+nu * Na_z * Nb_z + tauC * Na_z * Nb_z);
-			T[0][0] += Tii;
-			T[1][1] += Tii;
-			T[2][2] += Tii;
+// 	double tauM, tauC;
+// 	Tau(InvGradMap, u, tauM, tauC);
+// 	int a, b, nen = Nx.size();
+// 	for (a = 0; a<nen; a++) {
+// 		double Na = Nx[a];
+// 		double Na_x = dNdx[a][0];
+// 		double Na_y = dNdx[a][1];
+// 		double Na_z = dNdx[a][2];
+// 		for (b = 0; b<nen; b++) {
+// 			double Nb = Nx[b];
+// 			double Nb_x = dNdx[b][0];
+// 			double Nb_y = dNdx[b][1];
+// 			double Nb_z = dNdx[b][2];
+// 			/* ----- */
+// 			int i, j;
+// 			double T[4][4];
+// 			double Tii =
+// 				(
+// 					+ Na * (ux * Nb_x + uy * Nb_y + uz * Nb_z)
+// 					+ nu * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z)
+// 					+ tauM * (ux * Na_x + uy * Na_y + uz * Na_z) *
+// 					/**/     ((ux * Nb_x + uy * Nb_y + uz * Nb_z))
+// 					);
+// 			T[0][0] = (+nu * Na_x * Nb_x + tauC * Na_x * Nb_x);
+// 			T[0][1] = (+nu * Na_y * Nb_x + tauC * Na_x * Nb_y);
+// 			T[0][2] = (+nu * Na_z * Nb_x + tauC * Na_x * Nb_z);
+// 			//			
+// 			T[1][0] = (+nu * Na_x * Nb_y + tauC * Na_y * Nb_x);
+// 			T[1][1] = (+nu * Na_y * Nb_y + tauC * Na_y * Nb_y);
+// 			T[1][2] = (+nu * Na_z * Nb_y + tauC * Na_y * Nb_z);
+// 			//			
+// 			T[2][0] = (+nu * Na_x * Nb_z + tauC * Na_z * Nb_x);
+// 			T[2][1] = (+nu * Na_y * Nb_z + tauC * Na_z * Nb_y);
+// 			T[2][2] = (+nu * Na_z * Nb_z + tauC * Na_z * Nb_z);
+// 			T[0][0] += Tii;
+// 			T[1][1] += Tii;
+// 			T[2][2] += Tii;
 			
-			T[0][3] = -Na_x * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_x;
-			T[1][3] = -Na_y * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_y;
-			T[2][3] = -Na_z * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_z;
+// 			T[0][3] = -Na_x * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_x;
+// 			T[1][3] = -Na_y * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_y;
+// 			T[2][3] = -Na_z * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_z;
 			
-			T[3][0] = +Na * Nb_x + tauM * Na_x * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
-			T[3][1] = +Na * Nb_y + tauM * Na_y * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
-			T[3][2] = +Na * Nb_z + tauM * Na_z * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
+// 			T[3][0] = +Na * Nb_x + tauM * Na_x * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
+// 			T[3][1] = +Na * Nb_y + tauM * Na_y * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
+// 			T[3][2] = +Na * Nb_z + tauM * Na_z * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
 			
-			T[3][3] = +tauM * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z);
+// 			T[3][3] = +tauM * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z);
 			
-			for (i = 0; i < 4; i++)
-				for (j = 0; j < 4; j++)
-					Ke[a][i][b][j] += T[i][j] * detJ;
-		}
-	}
-}
+// 			for (i = 0; i < 4; i++)
+// 				for (j = 0; j < 4; j++)
+// 					Ke[a][i][b][j] += T[i][j] * detJ;
+// 		}
+// 	}
+// }
 
-void TransportOpt2D::MatrixAssembly(vector<array<vector<array<double, 4>>, 4>>& Ke, const vector<int>& IEN, Mat& GK)
+void TransportOpt2D::MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat)
 {
 	int i, j, A, B, m, n;	
 	int row_start, row_end, row_now;
 	int add=0;
 
-	PetscInt *nodeList = new PetscInt[IEN.size()*4];
-	PetscReal *tmpGK = new PetscReal[IEN.size() * 4 * IEN.size() * 4];
+	PetscInt *nodeList = new PetscInt[IEN.size()];
+	PetscReal *tmpGmat = new PetscReal[IEN.size() * IEN.size()];
 	
 	for (m = 0; m<IEN.size(); m++){
 		A = IEN[m];
-		for (i = 0; i < 4; i++){
-			nodeList[4 * m + i] = 4 * A + i;
-			for (n = 0; n<IEN.size(); n++){
+		nodeList[m] = A;
+		for (n = 0; n<IEN.size(); n++){
 				B = IEN[n];
-				for (j = 0; j < 4; j++){
-					tmpGK[add] = Ke[m][i][n][j];
-					add++;								 
-				}
-			}
-		}
-	}		
-	MatSetValues(GK, IEN.size() * 4, nodeList, IEN.size() * 4, nodeList, tmpGK, ADD_VALUES);
-	delete nodeList;
-	delete tmpGK;	
-}
-
-void TransportOpt2D::ResidualAssembly(vector<array<double, 4>> &Re, const vector<int>& IEN, Vec& GR)
-{
-	int i, j, A, B, m, n;
-	int add = 0;
-
-
-	PetscInt *nodeList = new PetscInt[IEN.size() * 4];
-	PetscReal *tmpGR = new PetscReal[IEN.size() * 4];
-	for (m = 0; m<IEN.size(); m++)
-	{
-		A = IEN[m];
-		for (i = 0; i < 4; i++)	{
-			nodeList[4 * m + i] = 4 * A + i;
-			tmpGR[add] = -Re[m][i];
-			add++;
+				tmpGmat[add] = Emat[m][n];
+				add++;
 		}
 	}
-	
-	VecSetValues(GR, IEN.size() * 4, nodeList, tmpGR, ADD_VALUES);
-	delete  nodeList;
-	delete  tmpGR;
+
+	MatSetValues(Gmat, IEN.size(), nodeList, IEN.size(), nodeList, tmpGmat, ADD_VALUES);
+	delete nodeList;
+	delete tmpGmat;	
 }
 
-void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex3D>& cpts, const vector<array<double, 3>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node)
+void TransportOpt2D::ComputeMassMatrix(vector<double>& Nx, const double detJ, vector<vector<double>>& MassMat)
+{
+	int a, b, nen = Nx.size();
+	for (a = 0; a < nen; a++)
+		for (b = 0; b < nen; b++)
+			MassMat[a][b] = Nx[a] * Nx[b] * detJ;
+}
+
+void TransportOpt2D::ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& StiffMat)
+{
+	int a, b, c, nen = dNdx.size();
+	double tmp = 0;
+	for (a = 0; a < nen; a++)
+	{
+		for (b = 0; b < nen; b++)
+		{
+			tmp = 0;
+			for (c = 0; c < dim; c++)
+			{
+				tmp += dNdx[a][c] * dNdx[b][c] * detJ;
+			}
+			StiffMat[a][b] = tmp;
+		}
+	}
+}
+
+void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat)
+{
+	int a, b, nen = Nx.size();
+	for (a = 0; a < nen; a++)
+		for (b = 0; b < nen; b++)
+			ParMat[a][b] = Nx[a] * dNdx[b][dir] * detJ;
+}
+
+void TransportOpt2D::GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep)
+{
+    i_tstep = row / (n_var * nPoint);
+    i_var = row % (n_var * nPoint) / nPoint;
+    i_point = row % (n_var * nPoint) % nPoint;
+}
+
+void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+	PetscInt *col;
+	PetscScalar scale;
+	PetscScalar *vals;
+	const PetscScalar *vals_Extract;
+
+	PetscMalloc1(nPoint, &col);
+	PetscMalloc1(nPoint, &vals);
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	for(row = start; row < end; row++)
+	{
+        GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+		
+		switch (ind_var)
+		{
+		case 1:
+			MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			scale = alpha1;
+			break;
+		case 2:
+			MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			scale = alpha2;
+			break;
+		case 3:
+			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			scale = beta1;
+			break;
+		case 4:
+			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			scale = beta1;
+			break;
+		case 5:
+			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			scale = beta2;
+			break;
+		case 6:
+			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			scale = beta2;
+			break;
+		default:
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = 0.;
+			break;
+		}
+
+		if(ind_time == 0 || ind_time == nTstep - 1 )
+			scale = scale * 0.5 * dt;
+		else
+			scale = scale * dt;
+
+		for(int i = 0; i < nPoint; i++)
+		{
+			vals[i] = vals_Extract[i]*scale;
+			col[i] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+		}
+			
+
+		MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+
+		if(ind_var>=3)
+			MatRestoreRow(M,ind_point,NULL,NULL,&vals_Extract);
+		else if(ind_var>0)
+			MatRestoreRow(K,ind_point,NULL,NULL,&vals_Extract);
+
+	}
+
+	PetscFree(col);
+	PetscFree(vals);
+
+	delete col;
+	delete vals;
+	delete vals_Extract;
+	
+}
+
+void TransportOpt2D::FormMatrixA12(Mat M, Mat K, Mat &A)
+{
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, ctrl_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
+	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+}
+
+void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+
+	const PetscScalar *vals_m, *vals_k, *vals_px, *vals_py;
+
+	PetscInt *col;
+	PetscScalar *vals;
+	PetscScalar scale;
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	for(row = start; row < end; row++)
+	{
+        GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+		MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+		MatGetRow(K,ind_point,NULL,NULL,&vals_k);
+		MatGetRow(P[0],ind_point,NULL,NULL,&vals_px);
+		MatGetRow(P[1],ind_point,NULL,NULL,&vals_py);
+		if(ind_time > 0)
+		{
+			switch (ind_var)
+			{
+			case 0:
+				// PetscInt *col = new PetscInt[4 * nPoint];
+				// PetscScalar *vals = new PetscScalar[4 * nPoint];
+				PetscMalloc1(4 * nPoint, &col);
+				PetscMalloc1(4 * nPoint, &vals);
+				for(int i = 0; i < nPoint; i++)
+				{
+					vals[i + 0 * nPoint] = -vals_m[i];
+					vals[i + 1 * nPoint] = vals_m[i] * (1 + dt * par[3] + dt * par[4]);
+					vals[i + 2 * nPoint] = vals_m[i] * (-dt * par[3]);
+					vals[i + 3 * nPoint] = vals_m[i] * (-dt * par[4]);
+					col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+					col[i + 3 * nPoint] = i + (ind_var + 2) * nPoint + ind_time * nPoint * state_num; 
+				}
+				MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+				PetscFree(col);
+				PetscFree(vals);
+				break;
+			case 1:
+				// PetscInt *col = new PetscInt[5 * nPoint];
+				// PetscScalar *vals = new PetscScalar[5 * nPoint];
+				PetscMalloc1(5 * nPoint, &col);
+				PetscMalloc1(5 * nPoint, &vals);
+				for(int i = 0; i < nPoint; i++)
+				{
+					vals[i + 0 * nPoint] = -vals_m[i];
+					vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[5]);
+					vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[5]);
+					vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
+					vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
+					col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+					col[i + 3 * nPoint] = i + (ind_var + 3) * nPoint + ind_time * nPoint * state_num;
+					col[i + 4 * nPoint] = i + (ind_var + 4) * nPoint + ind_time * nPoint * state_num; 
+				}
+				MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+				PetscFree(col);
+				PetscFree(vals);
+				break;
+			case 2:
+				// PetscInt *col = new PetscInt[5 * nPoint];
+				// PetscScalar *vals = new PetscScalar[5 * nPoint];
+				PetscMalloc1(5 * nPoint, &col);
+				PetscMalloc1(5 * nPoint, &vals);
+				for(int i = 0; i < nPoint; i++)
+				{
+					vals[i + 0 * nPoint] = -vals_m[i];
+					vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[6]);
+					vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[6]);
+					vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
+					vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
+					col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+					col[i + 3 * nPoint] = i + (ind_var + 5) * nPoint + ind_time * nPoint * state_num;
+					col[i + 4 * nPoint] = i + (ind_var + 6) * nPoint + ind_time * nPoint * state_num; 
+				}
+				MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+				PetscFree(col);
+				PetscFree(vals);
+				break;
+			default:
+				// PetscInt *col = new PetscInt[2 * nPoint];
+				// PetscScalar *vals = new PetscScalar[2 * nPoint];
+				PetscMalloc1(2 * nPoint, &col);
+				PetscMalloc1(2 * nPoint, &vals);
+				for(int i = 0; i < nPoint; i++)
+				{
+					vals[i + 0 * nPoint] = -vals_m[i];
+					vals[i + 1 * nPoint] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+				PetscFree(col);
+				PetscFree(vals);
+				break;
+			}
+		}
+		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
+		MatRestoreRow(P[0],ind_point,NULL,NULL,&vals_px);
+		MatRestoreRow(P[1],ind_point,NULL,NULL,&vals_py);
+	}
+	delete col, vals;
+	delete vals_m, vals_k, vals_px, vals_py;
+}
+
+void TransportOpt2D::FormMatrixA21(Mat M, Mat K, Mat &A)
+{
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, ctrl_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
+	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+}
+
+void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+	PetscInt *col;
+
+	PetscScalar scale;
+	PetscScalar *vals;
+	const PetscScalar *vals_m;
+
+	PetscMalloc1(nPoint, &col);
+	PetscMalloc1(nPoint, &vals);
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, ctrl_num * nPoint * nTstep, ctrl_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	for(row = start; row < end; row++)
+	{
+        GetMatrixPosition(row, ctrl_num, ind_point, ind_var, ind_time);
+		MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+		switch (ind_var)
+		{
+		case 0:
+			scale = beta1;
+			break;
+		case 1:
+			scale = beta1;
+			break;
+		case 2:
+			scale = beta2;
+			break;
+		case 3:
+			scale = beta2;
+			break;
+		default:
+			break;
+		}
+
+		if(ind_time == 0 || ind_time == nTstep - 1 )
+			scale = scale * 0.5 * dt;
+		else
+			scale = scale * dt;
+
+		for(int i = 0; i < nPoint; i++)
+		{
+			vals[i] = vals_m[i]*scale;
+			col[i] = i + ind_var * nPoint + ind_time * nPoint * ctrl_num;
+		}
+			
+		MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+	}
+
+	PetscFree(col);
+	PetscFree(vals);
+
+	delete col;
+	delete vals;
+	delete vals_m;
+}
+
+void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+	PetscInt *col;
+
+	PetscScalar scale;
+	PetscScalar *vals;
+	const PetscScalar *vals_m;
+
+	PetscMalloc1(nPoint, &col);
+	PetscMalloc1(nPoint, &vals);
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, ctrl_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	for(row = start; row < end; row++)
+	{
+        GetMatrixPosition(row, ctrl_num, ind_point, ind_var, ind_time);
+		MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+
+		scale = -dt;
+		for(int i = 0; i < nPoint; i++)
+		{
+			vals[i] = vals_m[i]*scale;
+			col[i] = i + (ind_var + 3) * nPoint + ind_time * nPoint * state_num;
+		}
+			
+		MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+
+		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+	}
+
+	PetscFree(col);
+	PetscFree(vals);
+
+	delete col;
+	delete vals;
+	delete vals_m;
+}
+
+void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+	PetscScalar *vals_m = new PetscScalar[nPoint];
+	PetscScalar *vals_k = new PetscScalar[nPoint];
+	PetscScalar *vals_px = new PetscScalar[nPoint];
+	PetscScalar *vals_py = new PetscScalar[nPoint];
+	PetscScalar scale;
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	// for(row = start; row < end; row++)
+	// {
+    //     GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+	// 	MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+	// 	MatGetRow(K,ind_point,NULL,NULL,&vals_k);
+	// 	MatGetRow(P[0],ind_point,NULL,NULL,&vals_px);
+	// 	MatGetRow(P[1],ind_point,NULL,NULL,&vals_py);
+	// 	if(ind_time > 0)
+	// 	{
+	// 		switch (ind_var)
+	// 		{
+	// 		case 0:
+	// 			PetscInt *col = new PetscInt[4 * nPoint];
+	// 			PetscScalar *vals = new PetscScalar[4 * nPoint];
+	// 			for(int i = 0; i < nPoint; i++)
+	// 			{
+	// 				vals[i + 0 * nPoint] = -vals_m[i];
+	// 				vals[i + 1 * nPoint] = vals_m[i] * (1 + dt * par[3] + dt * par[4]);
+	// 				vals[i + 2 * nPoint] = vals_m[i] * (-dt * par[3]);
+	// 				vals[i + 3 * nPoint] = vals_m[i] * (-dt * par[4]);
+	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 3 * nPoint] = i + (ind_var + 2) * nPoint + ind_time * nPoint * state_num; 
+	// 			}
+	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+	// 			delete col, vals;
+	// 			break;
+	// 		case 1:
+	// 			PetscInt *col = new PetscInt[5 * nPoint];
+	// 			PetscScalar *vals = new PetscScalar[5 * nPoint];
+	// 			for(int i = 0; i < nPoint; i++)
+	// 			{
+	// 				vals[i + 0 * nPoint] = -vals_m[i];
+	// 				vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[5]);
+	// 				vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[5]);
+	// 				vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
+	// 				vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
+	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 3 * nPoint] = i + (ind_var + 3) * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 4 * nPoint] = i + (ind_var + 4) * nPoint + ind_time * nPoint * state_num; 
+	// 			}
+	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+	// 			delete col, vals;
+	// 			break;
+	// 		case 2:
+	// 			PetscInt *col = new PetscInt[5 * nPoint];
+	// 			PetscScalar *vals = new PetscScalar[5 * nPoint];
+	// 			for(int i = 0; i < nPoint; i++)
+	// 			{
+	// 				vals[i + 0 * nPoint] = -vals_m[i];
+	// 				vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[6]);
+	// 				vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[6]);
+	// 				vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
+	// 				vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
+	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 3 * nPoint] = i + (ind_var + 5) * nPoint + ind_time * nPoint * state_num;
+	// 				col[i + 4 * nPoint] = i + (ind_var + 6) * nPoint + ind_time * nPoint * state_num; 
+	// 			}
+	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+	// 			delete col, vals;
+	// 			break;
+	// 		default:
+	// 			PetscInt *col = new PetscInt[2 * nPoint];
+	// 			PetscScalar *vals = new PetscScalar[2 * nPoint];
+	// 			for(int i = 0; i < nPoint; i++)
+	// 			{
+	// 				vals[i + 0 * nPoint] = -vals_m[i];
+	// 				vals[i + 1 * nPoint] = vals_m[i] + dt * par[8] * vals_k[i];
+	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
+	// 			}
+	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+	// 			delete col, vals;
+	// 			break;
+	// 		}
+	// 	}
+	// }
+
+	delete vals_m, vals_k, vals_px, vals_py;
+}
+
+void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
+{
+	PetscInt ind_point, ind_var, ind_time;
+    PetscInt row, start, end;  
+	PetscInt *col = new PetscInt[nPoint];
+	PetscScalar *vals = new PetscScalar[nPoint];
+	const PetscScalar *vals_m;
+	PetscScalar scale;
+	
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, ctrl_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatGetOwnershipRange(A,&start,&end);
+	
+	for(row = start; row < end; row++)
+	{
+        GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+		if(ind_var >= 3)
+		{
+			MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+			scale = -dt;
+			for(int i = 0; i < nPoint; i++)
+			{
+				vals[i] = vals_m[i]*scale;
+				col[i] = i + (ind_var - 3) * nPoint + ind_time * nPoint * ctrl_num;
+			}
+			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+			MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		}
+	}
+
+	delete col;
+	delete vals;
+}
+
+void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
+{
+	MatCreate(PETSC_COMM_WORLD, &A);
+    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
+    MatSetType(A,MATMPIAIJ);
+    MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
+	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+}
+
+void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node)
 {
 	/*Build linear system in each process*/
 	int e;
@@ -752,90 +1234,111 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex3D>& cpts, cons
 		int nen, A;
 		double ux_bc, uy_bc, uz_bc, p_bc;
 	
-		double dudx[3][3];
+		double dudx[dim][dim];
 		double detJ;
 		vector<double> Nx;
-		vector<array<double, 3>> dNdx;
-		vector<array<array<double, 3>, 3>> dN2dx2;
-		vector<array<double, 4>> Re;
-		vector<array<vector<array<double, 4>>, 4>> Ke;
+		vector<array<double, 2>> dNdx;
+		vector<array<array<double, 2>, 2>> dN2dx2;
+		vector<vector<double>> Mtmp, Ktmp, Pxtmp, Pytmp;
+
+		// vector<array<double, 4>> Re;
+		// vector<array<vector<array<double, 4>>, 4>> Ke;
 	
-		vector<array<double, 4>> v_node;		
+		// vector<array<double, 4>> v_node;	
+
+		vector<double> n0_node, nplus_node, nminus_node;
+		vector<double> vplus_node[dim], vminus_node[dim];
+		vector<double> fplus_node[dim], fminus_node[dim];
 		
 		nen = bzmesh_process[e].IEN.size();
 		
 		Nx.clear(); Nx.resize(nen, 0);
 		dNdx.clear(); dNdx.resize(nen, { 0 });
 		dN2dx2.clear(); dN2dx2.resize(nen, { {0} });
-		Re.clear(); Re.resize(nen);
-		Ke.clear(); Ke.resize(nen);
-		v_node.clear(); v_node.resize(nen);
-	
-		for (int i = 0; i < nen; i++)
-			for (int j = 0; j < 4; j++)
-				Ke[i][j].resize(nen);
-	
-		for (int i = 0; i < nen; i++){
-			for (int m = 0; m < 4; m++)	{
-				for (int j = 0; j < nen; j++){
-					for (int n = 0; n < 4; n++)	{
-						Ke[i][m][j][n] = 0.;
-					}	
-				}
-				Re[i][m] = 0.;
-			}
+
+		n0_node.clear(); n0_node.resize(nen, 0);
+		nplus_node.clear(); nplus_node.resize(nen, 0);
+		nminus_node.clear(); nminus_node.resize(nen, 0);
+		for(int i=0;i<dim;i++)
+		{
+			vplus_node[i].clear(); vplus_node[i].resize(nen, 0);
+			vminus_node[i].clear(); vminus_node[i].resize(nen, 0);
+			fplus_node[i].clear(); fplus_node[i].resize(nen, 0);
+			fminus_node[i].clear(); fminus_node[i].resize(nen, 0);
 		}
-	
-		for (int i = 0; i < nen; i++){
-			for (int j = 0; j < 3; j++){
-				v_node[i][j] = velocity_max * velocity_node[bzmesh_process[e].IEN[i] * 3 + j];
-			}
-			v_node[i][3] = pressure_node[bzmesh_process[e].IEN[i]];
+		
+		Mtmp.clear(); Mtmp.resize(nen);
+		Ktmp.clear(); Ktmp.resize(nen);
+		Pxtmp.clear(); Pxtmp.resize(nen);
+		Pytmp.clear(); Pytmp.resize(nen);
+
+		for(int i = 0; i < nen; i++)
+		{
+			Mtmp[i].resize(nen, 0.);
+			Ktmp[i].resize(nen, 0.);
+			Pxtmp[i].resize(nen, 0.);
+			Pytmp[i].resize(nen, 0.);
 		}
 	
 		for (int i = 0; i < Gpt.size(); i++){
 			for (int j = 0; j < Gpt.size(); j++){
-				for (int k = 0; k < Gpt.size(); k++){
-					BasisFunction(Gpt[i], Gpt[j], Gpt[k], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
-					detJ = wght[i] * wght[j] * wght[k] * detJ;
-					Tangent(Nx, dNdx, dudx, detJ, v_node, Ke);
-					Residual(Nx, dNdx, dN2dx2, dudx, detJ, v_node, Re);
-				}
+					BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
+					detJ = wght[i] * wght[j] * detJ;
+					ComputeMassMatrix(Nx, detJ, Mtmp);
+					ComputeStiffMatrix(dNdx, detJ, Ktmp);
+					ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
+					ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
+					// Tangent(Nx, dNdx, dudx, detJ, v_node, Ke);
+					// Residual(Nx, dNdx, dN2dx2, dudx, detJ, v_node, Re);
 			}
-		}
-	
-		/*Apply Boundary Condition*/
-		for (int i = 0; i < nen; i++){
-			A = bzmesh_process[e].IEN[i];
-			if (cpts[A].label == 1) {
-				//inlet
-				ux_bc = velocity_max*velocity_bc[A][0] - velocity_node[A * 3];				
-				ApplyBoundaryCondition(ux_bc, i, 0, Ke, Re);
-				uy_bc = velocity_max*velocity_bc[A][1] - velocity_node[A * 3 + 1];
-				ApplyBoundaryCondition(uy_bc, i, 1, Ke, Re);
-				uz_bc = velocity_max*velocity_bc[A][2] - velocity_node[A * 3 + 2];
-				ApplyBoundaryCondition(uz_bc, i, 2, Ke, Re);
-			}
-			if (cpts[A].label == 0) {
-				//wall
-				ux_bc = 0.0 - velocity_node[A * 3];
-				ApplyBoundaryCondition(ux_bc, i, 0, Ke, Re);
-				uy_bc = 0.0 - velocity_node[A * 3 + 1];
-				ApplyBoundaryCondition(uy_bc, i, 1, Ke, Re);
-				uz_bc = 0.0 - velocity_node[A * 3 + 2];
-				ApplyBoundaryCondition(uz_bc, i, 2, Ke, Re);
-			}	
 		}
 
 		/*Start element vector assembly*/
-		ResidualAssembly(Re, bzmesh_process[e].IEN, GR);
+		MatrixAssembly(Mtmp, bzmesh_process[e].IEN, M);
+		MatrixAssembly(Ktmp, bzmesh_process[e].IEN, K);
+		MatrixAssembly(Pxtmp, bzmesh_process[e].IEN, P[0]);
+		MatrixAssembly(Pytmp, bzmesh_process[e].IEN, P[1]);
 	
 		/*Start element matrix assembly*/
-		MatrixAssembly(Ke, bzmesh_process[e].IEN, GK);
+		// TangentAssembly(Ke, bzmesh_process[e].IEN, GK);
+	
+		// /*Apply Boundary Condition*/
+		// for (int i = 0; i < nen; i++){
+		// 	A = bzmesh_process[e].IEN[i];
+		// 	if (cpts[A].label == 1) {
+		// 		//inlet
+		// 		ux_bc = velocity_max*velocity_bc[A][0] - velocity_node[A * 3];				
+		// 		ApplyBoundaryCondition(ux_bc, i, 0, Ke, Re);
+		// 		uy_bc = velocity_max*velocity_bc[A][1] - velocity_node[A * 3 + 1];
+		// 		ApplyBoundaryCondition(uy_bc, i, 1, Ke, Re);
+		// 		uz_bc = velocity_max*velocity_bc[A][2] - velocity_node[A * 3 + 2];
+		// 		ApplyBoundaryCondition(uz_bc, i, 2, Ke, Re);
+		// 	}
+		// 	if (cpts[A].label == 0) {
+		// 		//wall
+		// 		ux_bc = 0.0 - velocity_node[A * 3];
+		// 		ApplyBoundaryCondition(ux_bc, i, 0, Ke, Re);
+		// 		uy_bc = 0.0 - velocity_node[A * 3 + 1];
+		// 		ApplyBoundaryCondition(uy_bc, i, 1, Ke, Re);
+		// 		uz_bc = 0.0 - velocity_node[A * 3 + 2];
+		// 		ApplyBoundaryCondition(uz_bc, i, 2, Ke, Re);
+		// 	}	
+		// }
+
+		// /*Start element vector assembly*/
+		// ResidualAssembly(Re, bzmesh_process[e].IEN, GR);
+	
+		// /*Start element matrix assembly*/
+		// TangentAssembly(Ke, bzmesh_process[e].IEN, GK);
 	}
 	cout << "Process " << comRank << " :complete build matrix and vector!\n";
-	VecAssemblyBegin(GR);
-	MatAssemblyBegin(GK, MAT_FINAL_ASSEMBLY);	
+
+	MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
+	MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
+	MatAssemblyBegin(P[0], MAT_FINAL_ASSEMBLY);
+	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
+	// VecAssemblyBegin(GR);
+	// MatAssemblyBegin(GK, MAT_FINAL_ASSEMBLY);	
 }
 
 void TransportOpt2D::ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re)
@@ -862,7 +1365,7 @@ void TransportOpt2D::AssignProcessor(vector<vector<int>> &ele_proc)
 		ele_process.push_back(ele_proc[comRank][i]);
 }
 
-void TransportOpt2D::Run(const vector<Vertex3D>& cpts, const vector<Element3D>& tmesh, const vector<array<double, 3>>& velocity_bc, string fn)
+void TransportOpt2D::Run(const vector<Vertex2D>& cpts, const vector<Element2D>& tmesh, const vector<array<double, 2>>& velocity_bc, string fn)
 {
 	
 	int n_iterator(1);
@@ -876,101 +1379,207 @@ void TransportOpt2D::Run(const vector<Vertex3D>& cpts, const vector<Element3D>& 
 		PetscPrintf(PETSC_COMM_WORLD, "Iteration Step: %d\n", l);
 		/*Build Linear System*/
 		PetscPrintf(PETSC_COMM_WORLD, "Building Linear System...\n");	
-		MatZeroEntries(GK);
-		VecSet(GR, 0);		
+		MatZeroEntries(M);
+		MatZeroEntries(K);
+		MatZeroEntries(P[0]);
+		MatZeroEntries(P[1]);
+		// VecSet(GR, 0);		
 		t0 = time(NULL);
 		BuildLinearSystemProcess(cpts, velocity_bc, Vel, Pre);
-		VecAssemblyEnd(GR);
-		PetscPrintf(PETSC_COMM_WORLD, "Done Vector Assembly...\n");
-		MatAssemblyEnd(GK, MAT_FINAL_ASSEMBLY);	
-		t1 = time(NULL);
-		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
-		MPI_Barrier(comm);
-		PetscPrintf(PETSC_COMM_WORLD, "Solving...\n");
+		// // VecAssemblyEnd(GR);
+		// PetscPrintf(PETSC_COMM_WORLD, "Done Vector Assembly...\n");
+		MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 
-		t0 = time(NULL);
-		/*Petsc KSP solver setting*/
-		KSPCreate(PETSC_COMM_WORLD, &ksp);
-		KSPReset(ksp);
-		KSPSetOperators(ksp, GK, GK);		
-		KSPGetPC(ksp, &pc);
-		PCSetType(pc, PCBJACOBI);
-		KSPSetType(ksp, KSPGMRES);
-		KSPGMRESSetRestart(ksp, 500);
-		KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
-		KSP *subksp;
-		PC subpc;
-		PetscInt first,nlocal;
-		KSPSetTolerances(ksp, 1.e-7, PETSC_DEFAULT, PETSC_DEFAULT, 100000);
-		KSPSetPCSide(ksp, PC_RIGHT);
-		KSPSetFromOptions(ksp);
-		KSPSetUp(ksp);
-		PCBJacobiGetSubKSP(pc, &nlocal, &first, &subksp);
-		for (int i = 0; i<nlocal; i++) {
-			KSPGetPC(subksp[i], &subpc);		
-			PCSetType(subpc, PCILU);
-			KSPSetType(subksp[i], KSPGMRES);
-			KSPSetInitialGuessNonzero(subksp[i], PETSC_TRUE);
-			KSPSetPCSide(subksp[i], PC_RIGHT);
-		}
+		PetscViewer viewer;
+    	PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+
+    	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matM.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = MatView(M,viewer);
+		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matK.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = MatView(K,viewer);
+		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPx.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = MatView(P[0],viewer);
+		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPy.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = MatView(P[1],viewer);
+
+		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
+
+
+		/// A11
+		FormMatrixA11(M,K,Asubmat[0]);  // need debug
+		MatAssemblyBegin(Asubmat[0], MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(Asubmat[0], MAT_FINAL_ASSEMBLY);
+		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA11.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = MatView(Asubmat[0],viewer);
+
+		/// A12 & A21 // No problem
+		// FormMatrixA12(M,K,Asubmat[1]);  // need debug
+		// MatAssemblyBegin(Asubmat[1], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Asubmat[1], MAT_FINAL_ASSEMBLY);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA12.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[1],viewer);
+		// MatTranspose(Asubmat[1],MAT_INITIAL_MATRIX,&Asubmat[3]); //correct
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA21.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[3],viewer);
+
+		/// A13 & A31 // No problem
+		// FormMatrixA13(M,K,P,Asubmat[2]);  // need debug
+		// MatAssemblyBegin(Asubmat[2], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Asubmat[2], MAT_FINAL_ASSEMBLY);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA13.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[2],viewer);
+		// MatTranspose(Asubmat[2],MAT_INITIAL_MATRIX,&Asubmat[6]); //correct
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA31.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[6],viewer);
+
+		/// A22  // No problem
+		// FormMatrixA22(M,K,Asubmat[4]);  
+		// MatAssemblyBegin(Asubmat[4], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Asubmat[4], MAT_FINAL_ASSEMBLY);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA22.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[4],viewer);
+
+		/// A23 & A32 // No problem
+		// FormMatrixA23(M,K,Asubmat[5]); 
+		// MatAssemblyBegin(Asubmat[5], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Asubmat[5], MAT_FINAL_ASSEMBLY);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA23.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[5],viewer);
+		// MatTranspose(Asubmat[5],MAT_INITIAL_MATRIX,&Asubmat[7]);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA32.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[7],viewer);
+
+		/// A33 // No problem
+		// FormMatrixA33(M,K,Asubmat[8]);  // need debug
+		// MatAssemblyBegin(Asubmat[8], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Asubmat[8], MAT_FINAL_ASSEMBLY);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA33.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(Asubmat[8],viewer);
+
+
+		
+
+
+
+
+
+
+
+
+
+
+		// // FormMatrixA31(M,K,P,Asubmat[6]);
+		// // FormMatrixA21(M,K,Asubmat[3]);
+		// // FormMatrixA32(M,K,Asubmat[7]);
+		
+
+		
+		// t1 = time(NULL);
+		// PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
+		// MPI_Barrier(comm);
+		// PetscPrintf(PETSC_COMM_WORLD, "Solving...\n");
+
+
+		
+		// t0 = time(NULL);
+		// /*Petsc KSP solver setting*/
+		// KSPCreate(PETSC_COMM_WORLD, &ksp);
+		// KSPReset(ksp);
+		// KSPSetOperators(ksp, GK, GK);		
+		// KSPGetPC(ksp, &pc);
+		// PCSetType(pc, PCBJACOBI);
+		// KSPSetType(ksp, KSPGMRES);
+		// KSPGMRESSetRestart(ksp, 500);
+		// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+		// KSP *subksp;
+		// PC subpc;
+		// PetscInt first,nlocal;
+		// KSPSetTolerances(ksp, 1.e-7, PETSC_DEFAULT, PETSC_DEFAULT, 100000);
+		// KSPSetPCSide(ksp, PC_RIGHT);
+		// KSPSetFromOptions(ksp);
+		// KSPSetUp(ksp);
+		// PCBJacobiGetSubKSP(pc, &nlocal, &first, &subksp);
+		// for (int i = 0; i<nlocal; i++) {
+		// 	KSPGetPC(subksp[i], &subpc);		
+		// 	PCSetType(subpc, PCILU);
+		// 	KSPSetType(subksp[i], KSPGMRES);
+		// 	KSPSetInitialGuessNonzero(subksp[i], PETSC_TRUE);
+		// 	KSPSetPCSide(subksp[i], PC_RIGHT);
+		// }
 	
-		/*Solving the equation*/
-		KSPSolve(ksp, GR, temp_solution);
-		KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
-		PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
-		PetscInt its;
-		KSPGetIterationNumber(ksp, &its);
-		PetscPrintf(PETSC_COMM_WORLD, "iterations %d\n", its);
-		KSPConvergedReason reason;
-		KSPGetConvergedReason(ksp, &reason);
-		PetscPrintf(PETSC_COMM_WORLD, "KSPConvergedReason: %D\n", reason);
-		t1 = time(NULL);
-		PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
+		// /*Solving the equation*/
+		// KSPSolve(ksp, GR, temp_solution);
+		// KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
+		// PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
+		// PetscInt its;
+		// KSPGetIterationNumber(ksp, &its);
+		// PetscPrintf(PETSC_COMM_WORLD, "iterations %d\n", its);
+		// KSPConvergedReason reason;
+		// KSPGetConvergedReason(ksp, &reason);
+		// PetscPrintf(PETSC_COMM_WORLD, "KSPConvergedReason: %D\n", reason);
+		// t1 = time(NULL);
+		// PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
 
-		/*Collect the solution from all processors*/
-		Vec temp_solution_seq;
-		VecScatter ctx;
-		PetscScalar    *_a;
-		VecScatterCreateToAll(temp_solution, &ctx, &temp_solution_seq);
-		VecScatterBegin(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-		VecScatterEnd(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-		VecGetArray(temp_solution_seq, &_a);		
-		MPI_Barrier(comm);
+		// /*Collect the solution from all processors*/
+		// Vec temp_solution_seq;
+		// VecScatter ctx;
+		// PetscScalar    *_a;
+		// VecScatterCreateToAll(temp_solution, &ctx, &temp_solution_seq);
+		// VecScatterBegin(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
+		// VecScatterEnd(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
+		// VecGetArray(temp_solution_seq, &_a);		
+		// MPI_Barrier(comm);
 		
-		for (uint i = 0; i < cpts.size(); i++){
-			V_delta[3 * i] = PetscRealPart(_a[4 * i]);
-			V_delta[3 * i + 1] = PetscRealPart(_a[4 * i + 1]);
-			V_delta[3 * i + 2] = PetscRealPart(_a[4 * i + 2]);
-			P_delta[i] = PetscRealPart(_a[4 * i + 3]);
-		}
-		VecRestoreArray(temp_solution_seq, &_a);
-		VecScatterDestroy(&ctx);
-		VecDestroy(&temp_solution_seq);
+		// for (uint i = 0; i < cpts.size(); i++){
+		// 	V_delta[3 * i] = PetscRealPart(_a[4 * i]);
+		// 	V_delta[3 * i + 1] = PetscRealPart(_a[4 * i + 1]);
+		// 	V_delta[3 * i + 2] = PetscRealPart(_a[4 * i + 2]);
+		// 	P_delta[i] = PetscRealPart(_a[4 * i + 3]);
+		// }
+		// VecRestoreArray(temp_solution_seq, &_a);
+		// VecScatterDestroy(&ctx);
+		// VecDestroy(&temp_solution_seq);
 		
-		for (uint i = 0; i < cpts.size(); i++){
-			Vel[3 * i] += V_delta[3 * i];
-			Vel[3 * i + 1] += V_delta[3 * i + 1];
-			Vel[3 * i + 2] += V_delta[3 * i + 2];
-			Pre[i] += P_delta[i];
-		}
-		MPI_Barrier(comm);
-		/*Visualize the result*/
-		if (comRank == 0){
-			cout << "Visualizing...\n";
-			VisualizeVTK_ControlMesh(cpts, tmesh, l, fn);
-		}
-		MPI_Barrier(comm);
-		VisualizeVTK_PhysicalDomain(l, fn + "final_physics");
+		// for (uint i = 0; i < cpts.size(); i++){
+		// 	Vel[3 * i] += V_delta[3 * i];
+		// 	Vel[3 * i + 1] += V_delta[3 * i + 1];
+		// 	Vel[3 * i + 2] += V_delta[3 * i + 2];
+		// 	Pre[i] += P_delta[i];
+		// }
+		// MPI_Barrier(comm);
+		// /*Visualize the result*/
+		// if (comRank == 0){
+		// 	cout << "Visualizing...\n";
+		// 	VisualizeVTK_ControlMesh(cpts, tmesh, l, fn);
+		// }
+		// MPI_Barrier(comm);
+		// VisualizeVTK_PhysicalDomain(l, fn + "final_physics");
 	}
-	MatDestroy(&GK);
-	VecDestroy(&GR);
+	// MatDestroy(&GK);
+	// VecDestroy(&GR);
 	VecDestroy(&temp_solution);
 	KSPDestroy(&ksp);
 
 	MPI_Barrier(comm);
 }
 
-void TransportOpt2D::VisualizeVTK_ControlMesh(const vector<Vertex3D>& spt, const vector<Element3D>& mesh, int step, string fn)
+void TransportOpt2D::VisualizeVTK_ControlMesh(const vector<Vertex2D>& spt, const vector<Element2D>& mesh, int step, string fn)
 {
 	stringstream ss;
 	ss << step;
@@ -1062,11 +1671,10 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 		{
 			for (int b = 0; b<ns; b++)
 			{
-				for (int c = 0; c < ns; c++)
-				{
+
 					double pt1[3], dudx[3];
 					double result[4];
-					ResultCal_Bezier(su[c], su[b], su[a], bzmesh_process[e], pt1, result, dudx, detJ);
+					ResultCal_Bezier(su[b], su[a], bzmesh_process[e], pt1, result, dudx, detJ);
 					spt_proc[24 * e + loc*3 + 0] = pt1[0];
 					spt_proc[24 * e + loc*3 + 1] = pt1[1];
 					spt_proc[24 * e + loc*3 + 2] = pt1[2];
@@ -1075,7 +1683,7 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 					sresult_proc[32 * e + loc * 4 + 2] = result[2];
 					sresult_proc[32 * e + loc * 4 + 3] = result[3];
 					loc++;
-				}
+				
 			}
 		}
 		int nns[2] = { ns*ns*ns, ns*ns };
@@ -1241,14 +1849,14 @@ void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<d
 	}
 }
 
-void TransportOpt2D::ResultCal_Bezier(double u, double v, double w, const Element3D& bzel, double pt[3], double result[4], double dudx[3], double& detJ)
+void TransportOpt2D::ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ)
 {
-	double dUdx[3][3];
+	double dUdx[dim][dim];
 	vector<double> Nx(bzel.IEN.size());
-	vector<array<double, 3>> dNdx(bzel.IEN.size());
-	vector<array<array<double, 3>, 3>> dN2dx2;
-	bzel.Para2Phys(u, v, w, pt);
-	BasisFunction(u, v, w, bzel.IEN.size(), bzel.pts, bzel.cmat, Nx, dNdx,dN2dx2, dUdx, detJ);
+	vector<array<double, dim>> dNdx(bzel.IEN.size());
+	vector<array<array<double, dim>, dim>> dN2dx2;
+	bzel.Para2Phys(u, v, pt);
+	BasisFunction(u, v, bzel.IEN.size(), bzel.pts, bzel.cmat, Nx, dNdx,dN2dx2, dUdx, detJ);
 	result[0] = 0.; result[1] = 0.; result[2] = 0.; result[3] = 0.;
 	for (uint i = 0; i < bzel.IEN.size(); i++)	{
 		result[0] += Nx[i] * (Vel[dim* bzel.IEN[i] + 0]);
