@@ -16,7 +16,6 @@ const int degree = 3;
 const int dim = 2;
 const int state_num = 7;
 const int ctrl_num = 4;
-
 const int bzpt_num = 16;
 
 
@@ -40,13 +39,7 @@ private:
 	vector<Element2D> bzmesh_process;
 
 	KSP ksp;
-	SNES snes;
 	PC pc;
-
-	
-	// Mat GK;
-	// Vec GR;
-	Vec temp_solution;
 	
 	double dt;
 	double velocity_max;
@@ -63,7 +56,7 @@ private:
 
 	// constant parameters
 	vector<double> par; //Dn0, v_plus, v_minus, k+, k-,k'+,k'-,c0,mu
-	double alpha1, alpha2;
+	double alpha0, alpha1, alpha2;
 	double beta1, beta2;
 
 	// state variables
@@ -77,12 +70,21 @@ private:
 	// Unit Np * Np Matrix
 	Mat M, K, P[dim];
 	
-	// KKT system matrix
+	// KKT system matrix and vector
 	Mat Asubmat[9];
+	Mat PCsubmat[9];
+	Vec bsub[3];
+	IS isg[3];
 
-	// 
-	// Vec Residual;
-	// Mat Tangent;
+	// Variables for solving iteration
+	Vec Y_d;
+	Vec Y_ini, U_ini, L_ini; // Initial value in time space
+	Vec Y_k, U_k, L_k; // Initial value in iteration
+	Vec Res_nl;
+
+	Vec temp_solution;
+	Vec ResVec;
+	Mat TanMat;
 
 	vector<double> Vel;
 	vector<double> Pre;
@@ -106,6 +108,8 @@ private:
 	void ComputeMassMatrix(vector<double>& Nx, const double detJ, vector<vector<double>>& MassMat);
 	void ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& StiffMat);
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
+	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
+	void ComputeResVector(vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ);
 
 	void GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep);
 	void FormMatrixA11(Mat M, Mat K, Mat &A);
@@ -117,11 +121,13 @@ private:
 	void FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A);
 	void FormMatrixA32(Mat M, Mat K, Mat &A);
 	void FormMatrixA33(Mat M, Mat K, Mat &A);
+	void FormMatrixPC(Mat M, Mat K, Mat &A);
+	void TangentMatSetup();
 
-
-	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
-	void TangentAssemble();
-	void ResidualAssemble();
+	void FormResVecb1();
+	void FormResVecb2();
+	void FormResVecb3();
+	void ResidualVecSetup();
 
 	void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);
 	void Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke);

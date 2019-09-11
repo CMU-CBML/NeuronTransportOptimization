@@ -42,5 +42,5 @@ TransportOpt2D.o: TransportOpt2D.cpp
 main.o: main.cpp
 	$(Compiler)	-c main.cpp $(CFLAGS)
 
-# clean:
-# 	rm *o neuron_opt
+clean::
+	rm neuron_opt

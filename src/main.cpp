@@ -8,12 +8,8 @@
 #include <sstream>
 #include <iomanip>
 #include "time.h"
-
 #include <petscsys.h>
-#include <petscdm.h>
-#include <petscdmda.h>
-#include <petscts.h>
-#include <petsctao.h>
+#include <petsc.h>
 
 
 
@@ -41,7 +37,7 @@ int main(int argc, char **argv)
 		MPI_Comm_size(PETSC_COMM_WORLD, &nProcs);
 
 		int dim(2), n_bzmesh;
-    int ntstep(3);
+    	int ntstep(3);
 
 		vector<double> var;		
 		vector<array<double, 2>>velocity_node;

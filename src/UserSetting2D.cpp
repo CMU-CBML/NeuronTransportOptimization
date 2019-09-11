@@ -6,14 +6,14 @@ UserSetting2D::UserSetting2D()
 
 void UserSetting2D::SetVariables(string fn_par, vector<double>& var)
 {
-	var.resize(18);
+	var.resize(19);
 	string fname(fn_par), stmp;
 	stringstream ss;
 	ifstream fin;
 	fin.open(fname);
 	if (fin.is_open())
 	{
-		for (int i = 0; i < 18; i++)
+		for (int i = 0; i < 19; i++)
 		{
 			fin >> stmp >> var[i];
 		}	

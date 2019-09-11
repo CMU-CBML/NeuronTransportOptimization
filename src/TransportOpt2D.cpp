@@ -198,12 +198,13 @@ void TransportOpt2D::InitializeProblem(const int ndof, const int n_bz, const vec
 	nPoint = ndof;	
 
 	// constant parameters
-	alpha1 = var[9];
-	alpha2 = var[10];
-	beta1 = var[11];
-	beta2 = var[12];
-	dt = var[13];
-	nTstep = var[14];
+	alpha0 = var[9];
+	alpha1 = var[10];
+	alpha2 = var[11];
+	beta1 = var[12];
+	beta2 = var[13];
+	dt = var[14];
+	nTstep = var[15];
 	par = var;//Dn0, v_plus, v_minus, k+, k-,k'+,k'-
 
 	// state variables
@@ -257,8 +258,28 @@ void TransportOpt2D::InitializeProblem(const int ndof, const int n_bz, const vec
 
 	// ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
 	// ierr = MatSetUp(GK); 
-	// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &GR);
-	// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, mat_dim, &temp_solution);
+
+	cout << "Setup Initial Vector\n";
+
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Y_k);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * ctrl_num * nTstep,  &U_k);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &L_k);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Y_d);
+
+	ierr = VecSet(Y_k, 1.0);
+	ierr = VecSet(U_k, 1.0);
+	ierr = VecSet(L_k, 1.0);
+	ierr = VecSet(Y_d, 0.0);
+
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Res_nl);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &temp_solution);
+	ierr = VecSet(Res_nl, 0.0);
+
+	ierr = VecCreate(PETSC_COMM_WORLD, &ResVec);
+	ierr = VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
+	ierr = VecSetFromOptions(ResVec);
+
+
 }
 
 /// Need to pay attention that basis function right now is computed for iga using Bezier element definition
@@ -536,151 +557,6 @@ void TransportOpt2D::PointFormHess(vector<array<array<double, dim>, dim>>& d2Ndx
 
 }
 
-// void TransportOpt2D::Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re)
-// {
-// 	/*calculate residual of the equation*/
-// 	double U_t[4], UU[4];
-// 	double grad_U[4][3];
-// 	double der2_U[4][3][3];
-
-// 	PointFormValue(Nx, U, UU);
-// 	PointFormGrad(dNdx, U, grad_U);
-// 	PointFormHess(dN2dx2, U, der2_U);
-
-// 	double u[3] = { UU[0],UU[1],UU[2] };
-// 	double u_x[3] = { grad_U[0][0],grad_U[1][0],grad_U[2][0] };
-// 	double u_y[3] = { grad_U[0][1],grad_U[1][1],grad_U[2][1] };
-// 	double u_z[3] = { grad_U[0][2],grad_U[1][2],grad_U[2][2] };
-// 	double u_xx[3] = { der2_U[0][0][0],der2_U[1][0][0],der2_U[2][0][0] };
-// 	double u_yy[3] = { der2_U[0][1][1],der2_U[1][1][1],der2_U[2][1][1] };
-// 	double u_zz[3] = { der2_U[0][2][2],der2_U[1][2][2],der2_U[2][2][2] };
-// 	double p = UU[3];
-// 	double p_x = grad_U[3][0], p_y = grad_U[3][1], p_z = grad_U[3][2];
-
-
-// 	double InvGradMap[3][3];
-// 	for (int i = 0; i < 3; i++) {
-// 		for (int j = 0; j < 3; j++) {
-// 			InvGradMap[i][j] = dudx[i][j];
-// 		}
-// 	}
-
-// 	double tauM, tauC;
-// 	Tau(InvGradMap, UU, tauM, tauC);
-// 	double u_s[3], p_s;
-// 	FineScale(tauM, tauC, u, u_x, u_y, u_z, u_xx, u_yy, u_zz, p, p_x, p_y, p_z, u_s, p_s);
-
-// 	int a, nen = Nx.size();
-// 	for (a = 0; a<nen; a++) {
-// 		double Na = Nx[a];
-// 		double Na_x = dNdx[a][0];
-// 		double Na_y = dNdx[a][1];
-// 		double Na_z = dNdx[a][2];
-		
-// 		double Rux, Ruy, Ruz, Rp;
-		
-// 		Rux = -Na*fx;
-// 		Ruy = -Na*fy;
-// 		Ruz = -Na*fz;
-// 		Rp = 0.0;
-		
-// 		Rux += - Na_x*p + nu*(Na_x*(u_x[0] + u_x[0]) + Na_y*(u_y[0] + u_x[1]) + Na_z*(u_z[0] + u_x[2]));
-// 		Ruy += - Na_y*p + nu*(Na_x*(u_x[1] + u_y[0]) + Na_y*(u_y[1] + u_y[1]) + Na_z*(u_z[1] + u_y[2]));
-// 		Ruz += - Na_z*p + nu*(Na_x*(u_x[2] + u_z[0]) + Na_y*(u_y[2] + u_z[1]) + Na_z*(u_z[2] + u_z[2]));
-// 		Rp += Na*(u_x[0] + u_y[1] + u_z[2]);
-		
-// 		Rux += -(Na_x*p_s);
-// 		Ruy += -(Na_y*p_s);
-// 		Ruz += -(Na_z*p_s);
-// 		Rp += -(Na_x*u_s[0] + Na_y*u_s[1] + Na_z*u_s[2]);
-		
-// 		Rux += +Na * ((u[0] + u_s[0])*u_x[0] + (u[1] + u_s[1])*u_y[0] + (u[2] + u_s[2])*u_z[0]);
-// 		Ruy += +Na * ((u[0] + u_s[0])*u_x[1] + (u[1] + u_s[1])*u_y[1] + (u[2] + u_s[2])*u_z[1]);
-// 		Ruz += +Na * ((u[0] + u_s[0])*u_x[2] + (u[1] + u_s[1])*u_y[2] + (u[2] + u_s[2])*u_z[2]);
-		
-// 		Rux += -(Na_x*u_s[0] * (u[0] + u_s[0]) + Na_y*u_s[0] * (u[1] + u_s[1]) + Na_z*u_s[0] * (u[2] + u_s[2]));
-// 		Ruy += -(Na_x*u_s[1] * (u[0] + u_s[0]) + Na_y*u_s[1] * (u[1] + u_s[1]) + Na_z*u_s[1] * (u[2] + u_s[2]));
-// 		Ruz += -(Na_x*u_s[2] * (u[0] + u_s[0]) + Na_y*u_s[2] * (u[1] + u_s[1]) + Na_z*u_s[2] * (u[2] + u_s[2]));
-		
-// 		Re[a][0] += Rux * detJ;
-// 		Re[a][1] += Ruy * detJ;
-// 		Re[a][2] += Ruz * detJ;
-// 		Re[a][3] += Rp  * detJ;
-// 	}
-
-// }
-
-// void TransportOpt2D::Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke)
-// {
-// 	/*calculate tangent matrix*/
-// 	double u[4];
-// 	PointFormValue(Nx, U, u);
-// 	double ux = u[0];
-// 	double uy = u[1];
-// 	double uz = u[2];
-
-// 	double InvGradMap[3][3];
-// 	for (int i = 0; i < 3; i++){
-// 		for (int j = 0; j < 3; j++){
-// 			InvGradMap[i][j] = dudx[i][j];
-// 		}
-// 	}
-
-// 	double tauM, tauC;
-// 	Tau(InvGradMap, u, tauM, tauC);
-// 	int a, b, nen = Nx.size();
-// 	for (a = 0; a<nen; a++) {
-// 		double Na = Nx[a];
-// 		double Na_x = dNdx[a][0];
-// 		double Na_y = dNdx[a][1];
-// 		double Na_z = dNdx[a][2];
-// 		for (b = 0; b<nen; b++) {
-// 			double Nb = Nx[b];
-// 			double Nb_x = dNdx[b][0];
-// 			double Nb_y = dNdx[b][1];
-// 			double Nb_z = dNdx[b][2];
-// 			/* ----- */
-// 			int i, j;
-// 			double T[4][4];
-// 			double Tii =
-// 				(
-// 					+ Na * (ux * Nb_x + uy * Nb_y + uz * Nb_z)
-// 					+ nu * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z)
-// 					+ tauM * (ux * Na_x + uy * Na_y + uz * Na_z) *
-// 					/**/     ((ux * Nb_x + uy * Nb_y + uz * Nb_z))
-// 					);
-// 			T[0][0] = (+nu * Na_x * Nb_x + tauC * Na_x * Nb_x);
-// 			T[0][1] = (+nu * Na_y * Nb_x + tauC * Na_x * Nb_y);
-// 			T[0][2] = (+nu * Na_z * Nb_x + tauC * Na_x * Nb_z);
-// 			//			
-// 			T[1][0] = (+nu * Na_x * Nb_y + tauC * Na_y * Nb_x);
-// 			T[1][1] = (+nu * Na_y * Nb_y + tauC * Na_y * Nb_y);
-// 			T[1][2] = (+nu * Na_z * Nb_y + tauC * Na_y * Nb_z);
-// 			//			
-// 			T[2][0] = (+nu * Na_x * Nb_z + tauC * Na_z * Nb_x);
-// 			T[2][1] = (+nu * Na_y * Nb_z + tauC * Na_z * Nb_y);
-// 			T[2][2] = (+nu * Na_z * Nb_z + tauC * Na_z * Nb_z);
-// 			T[0][0] += Tii;
-// 			T[1][1] += Tii;
-// 			T[2][2] += Tii;
-			
-// 			T[0][3] = -Na_x * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_x;
-// 			T[1][3] = -Na_y * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_y;
-// 			T[2][3] = -Na_z * Nb + tauM * (ux * Na_x + uy * Na_y + uz * Na_z) * Nb_z;
-			
-// 			T[3][0] = +Na * Nb_x + tauM * Na_x * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
-// 			T[3][1] = +Na * Nb_y + tauM * Na_y * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
-// 			T[3][2] = +Na * Nb_z + tauM * Na_z * ((ux * Nb_x + uy * Nb_y + uz * Nb_z));
-			
-// 			T[3][3] = +tauM * (Na_x * Nb_x + Na_y * Nb_y + Na_z * Nb_z);
-			
-// 			for (i = 0; i < 4; i++)
-// 				for (j = 0; j < 4; j++)
-// 					Ke[a][i][b][j] += T[i][j] * detJ;
-// 		}
-// 	}
-// }
-
 void TransportOpt2D::MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat)
 {
 	int i, j, A, B, m, n;	
@@ -739,6 +615,100 @@ void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, d
 			ParMat[a][b] = Nx[a] * dNdx[b][dir] * detJ;
 }
 
+void TransportOpt2D::ComputeResVector(vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ)
+{
+	int a, b, nen = IEN.size();
+	PetscInt *rows;
+	PetscReal *vals;
+
+	PetscMalloc1(IEN.size()*state_num, &rows);
+	PetscMalloc1(IEN.size()*state_num, &vals);
+
+	vector<double> n0_node, nplus_node, nminus_node;
+	vector<double> vplus_node[dim], vminus_node[dim];
+	n0_node.clear(); n0_node.resize(nen, 0);
+	nplus_node.clear(); nplus_node.resize(nen, 0);
+	nminus_node.clear(); nminus_node.resize(nen, 0);
+	for(int i=0;i<dim;i++)
+	{
+		vplus_node[i].clear(); vplus_node[i].resize(nen, 0);
+		vminus_node[i].clear(); vminus_node[i].resize(nen, 0);
+	}
+
+	for(int j = 0; j < nTstep; j++)
+	{
+		
+		for(int i = 0; i < nen; i++)
+		{
+			int A = IEN[i] + j * nPoint;
+			n0_node[i] = n0[A];
+			nplus_node[i] = n_plus[A];
+			nminus_node[i] = n_minus[A];
+			vplus_node[0][i] = Vel_plus[0][A];
+			vplus_node[1][i] = Vel_plus[1][A];
+			vminus_node[0][i] = Vel_minus[0][A];
+			vminus_node[1][i] = Vel_minus[1][A];
+		}
+
+		double n0Val;
+		double npVal, npGrad[dim], vpxVal, vpxGrad[dim], vpyVal, vpyGrad[dim];
+		double nmVal, nmGrad[dim], vmxVal, vmxGrad[dim], vmyVal, vmyGrad[dim];
+
+		PointFormValue(Nx,n0_node,n0Val);
+
+		PointFormValue(Nx,nplus_node,npVal);
+		PointFormValue(Nx,vplus_node[0],vpxVal);
+		PointFormValue(Nx,vplus_node[1],vpyVal);
+		PointFormGrad(dNdx,nplus_node,npGrad);
+		PointFormGrad(dNdx,vplus_node[0],vpxGrad);
+		PointFormGrad(dNdx,vplus_node[1],vpyGrad);
+
+		PointFormValue(Nx,nminus_node,nmVal);
+		PointFormValue(Nx,vminus_node[0],vmxVal);
+		PointFormValue(Nx,vminus_node[1],vmyVal);
+		PointFormGrad(dNdx,nminus_node,nmGrad);
+		PointFormGrad(dNdx,vminus_node[0],vmxGrad);
+		PointFormGrad(dNdx,vminus_node[1],vmyGrad);
+
+		for(int i = 0; i < nen; i++)
+		{
+			for(int k = 0; k < state_num; k++)
+			{
+				int A = IEN[i] + k * nPoint + j * nPoint * state_num;
+				rows[i + nen * k] = A;
+			}
+			vals[i + nen * 0] = 0.;
+			vals[i + nen * 1] = -Nx[i] * (vpxVal * npGrad[0] + vpyVal * npGrad[1]) * detJ * dt;
+			vals[i + nen * 2] = -Nx[i] * (vmxVal * nmGrad[0] + vmyVal * nmGrad[1]) * detJ * dt;
+			vals[i + nen * 3] = -Nx[i] * (vpxVal * vpxGrad[0] + vpyVal * vpxGrad[1]) * detJ * dt;
+			vals[i + nen * 4] = -Nx[i] * (vpxVal * vpyGrad[0] + vpyVal * vpyGrad[1]) * detJ * dt;
+			vals[i + nen * 5] = -Nx[i] * (vmxVal * vmxGrad[0] + vmyVal * vmxGrad[1]) * detJ * dt;
+			vals[i + nen * 6] = -Nx[i] * (vmxVal * vmyGrad[0] + vmyVal * vmyGrad[1]) * detJ * dt;
+		}
+		
+		if(j==0)
+		{
+			for(int i = 0; i < nen; i++)
+			{
+				vals[i + nen * 0] += Nx[i] * n0Val * detJ;
+				vals[i + nen * 1] += Nx[i] * npVal * detJ;
+				vals[i + nen * 2] += Nx[i] * nmVal * detJ;
+				vals[i + nen * 3] += Nx[i] * vpxVal * detJ;
+ 				vals[i + nen * 4] += Nx[i] * vpyVal * detJ;
+ 				vals[i + nen * 5] += Nx[i] * vmxVal * detJ;
+ 				vals[i + nen * 6] += Nx[i] * vmyVal * detJ;
+ 			}
+		}
+		VecSetValues(Res_nl, nen * state_num, rows, vals, ADD_VALUES); 
+	}
+
+	PetscFree(rows);
+	PetscFree(vals);
+
+	delete rows, vals;
+}
+
+
 void TransportOpt2D::GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep)
 {
     i_tstep = row / (n_var * nPoint);
@@ -751,9 +721,9 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 	PetscInt ind_point, ind_var, ind_time;
     PetscInt row, start, end;  
 	PetscInt *col;
-	PetscScalar scale;
-	PetscScalar *vals;
-	const PetscScalar *vals_Extract;
+	PetscReal scale;
+	PetscReal *vals;
+	const PetscReal *vals_m, *vals_k;
 
 	PetscMalloc1(nPoint, &col);
 	PetscMalloc1(nPoint, &vals);
@@ -767,57 +737,76 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 	for(row = start; row < end; row++)
 	{
         GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+		MatGetRow(K,ind_point,NULL,NULL,&vals_k);
+		MatGetRow(M,ind_point,NULL,NULL,&vals_m);
 		
 		switch (ind_var)
 		{
+		case 0:
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_k[i];
+			scale = alpha0;
+			break;
 		case 1:
-			MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_k[i];
 			scale = alpha1;
 			break;
 		case 2:
-			MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_k[i];
 			scale = alpha2;
 			break;
 		case 3:
-			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_m[i];
 			scale = beta1;
 			break;
 		case 4:
-			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_m[i];
 			scale = beta1;
 			break;
 		case 5:
-			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_m[i];
 			scale = beta2;
 			break;
 		case 6:
-			MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
+			for(int i = 0; i < nPoint; i++)
+				vals[i] = vals_m[i];
 			scale = beta2;
 			break;
-		default:
-			for(int i = 0; i < nPoint; i++)
-				vals[i] = 0.;
-			break;
+		// default:
+		// 	for(int i = 0; i < nPoint; i++)
+		// 		vals[i] = 0.;
+		// 	break;
 		}
 
-		if(ind_time == 0 || ind_time == nTstep - 1 )
+		if(ind_time == 0 || ind_time == (nTstep - 1))
 			scale = scale * 0.5 * dt;
 		else
 			scale = scale * dt;
 
 		for(int i = 0; i < nPoint; i++)
 		{
-			vals[i] = vals_Extract[i]*scale;
+			vals[i] = vals[i]*scale;
 			col[i] = i + ind_var * nPoint + ind_time * nPoint * state_num;
 		}
 			
 
 		MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
 
-		if(ind_var>=3)
-			MatRestoreRow(M,ind_point,NULL,NULL,&vals_Extract);
-		else if(ind_var>0)
-			MatRestoreRow(K,ind_point,NULL,NULL,&vals_Extract);
+		// if(ind_var>=3)
+			MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		// else if(ind_var>0)
+			MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
 
 	}
 
@@ -826,7 +815,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 
 	delete col;
 	delete vals;
-	delete vals_Extract;
+	delete vals_m, vals_k;
 	
 }
 
@@ -845,11 +834,11 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 	PetscInt ind_point, ind_var, ind_time;
     PetscInt row, start, end;  
 
-	const PetscScalar *vals_m, *vals_k, *vals_px, *vals_py;
+	const PetscReal *vals_m, *vals_k, *vals_px, *vals_py;
 
 	PetscInt *col;
-	PetscScalar *vals;
-	PetscScalar scale;
+	PetscReal *vals;
+	PetscReal scale;
 	
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
@@ -870,7 +859,7 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 			{
 			case 0:
 				// PetscInt *col = new PetscInt[4 * nPoint];
-				// PetscScalar *vals = new PetscScalar[4 * nPoint];
+				// PetscReal *vals = new PetscReal[4 * nPoint];
 				PetscMalloc1(4 * nPoint, &col);
 				PetscMalloc1(4 * nPoint, &vals);
 				for(int i = 0; i < nPoint; i++)
@@ -890,7 +879,7 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 				break;
 			case 1:
 				// PetscInt *col = new PetscInt[5 * nPoint];
-				// PetscScalar *vals = new PetscScalar[5 * nPoint];
+				// PetscReal *vals = new PetscReal[5 * nPoint];
 				PetscMalloc1(5 * nPoint, &col);
 				PetscMalloc1(5 * nPoint, &vals);
 				for(int i = 0; i < nPoint; i++)
@@ -912,7 +901,7 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 				break;
 			case 2:
 				// PetscInt *col = new PetscInt[5 * nPoint];
-				// PetscScalar *vals = new PetscScalar[5 * nPoint];
+				// PetscReal *vals = new PetscReal[5 * nPoint];
 				PetscMalloc1(5 * nPoint, &col);
 				PetscMalloc1(5 * nPoint, &vals);
 				for(int i = 0; i < nPoint; i++)
@@ -934,7 +923,7 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 				break;
 			default:
 				// PetscInt *col = new PetscInt[2 * nPoint];
-				// PetscScalar *vals = new PetscScalar[2 * nPoint];
+				// PetscReal *vals = new PetscReal[2 * nPoint];
 				PetscMalloc1(2 * nPoint, &col);
 				PetscMalloc1(2 * nPoint, &vals);
 				for(int i = 0; i < nPoint; i++)
@@ -975,9 +964,9 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
     PetscInt row, start, end;  
 	PetscInt *col;
 
-	PetscScalar scale;
-	PetscScalar *vals;
-	const PetscScalar *vals_m;
+	PetscReal scale;
+	PetscReal *vals;
+	const PetscReal *vals_m;
 
 	PetscMalloc1(nPoint, &col);
 	PetscMalloc1(nPoint, &vals);
@@ -1039,9 +1028,9 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
     PetscInt row, start, end;  
 	PetscInt *col;
 
-	PetscScalar scale;
-	PetscScalar *vals;
-	const PetscScalar *vals_m;
+	PetscReal scale;
+	PetscReal *vals;
+	const PetscReal *vals_m;
 
 	PetscMalloc1(nPoint, &col);
 	PetscMalloc1(nPoint, &vals);
@@ -1081,11 +1070,11 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 {
 	PetscInt ind_point, ind_var, ind_time;
     PetscInt row, start, end;  
-	PetscScalar *vals_m = new PetscScalar[nPoint];
-	PetscScalar *vals_k = new PetscScalar[nPoint];
-	PetscScalar *vals_px = new PetscScalar[nPoint];
-	PetscScalar *vals_py = new PetscScalar[nPoint];
-	PetscScalar scale;
+	PetscReal *vals_m = new PetscReal[nPoint];
+	PetscReal *vals_k = new PetscReal[nPoint];
+	PetscReal *vals_px = new PetscReal[nPoint];
+	PetscReal *vals_py = new PetscReal[nPoint];
+	PetscReal scale;
 	
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
@@ -1106,7 +1095,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	// 		{
 	// 		case 0:
 	// 			PetscInt *col = new PetscInt[4 * nPoint];
-	// 			PetscScalar *vals = new PetscScalar[4 * nPoint];
+	// 			PetscReal *vals = new PetscReal[4 * nPoint];
 	// 			for(int i = 0; i < nPoint; i++)
 	// 			{
 	// 				vals[i + 0 * nPoint] = -vals_m[i];
@@ -1123,7 +1112,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	// 			break;
 	// 		case 1:
 	// 			PetscInt *col = new PetscInt[5 * nPoint];
-	// 			PetscScalar *vals = new PetscScalar[5 * nPoint];
+	// 			PetscReal *vals = new PetscReal[5 * nPoint];
 	// 			for(int i = 0; i < nPoint; i++)
 	// 			{
 	// 				vals[i + 0 * nPoint] = -vals_m[i];
@@ -1142,7 +1131,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	// 			break;
 	// 		case 2:
 	// 			PetscInt *col = new PetscInt[5 * nPoint];
-	// 			PetscScalar *vals = new PetscScalar[5 * nPoint];
+	// 			PetscReal *vals = new PetscReal[5 * nPoint];
 	// 			for(int i = 0; i < nPoint; i++)
 	// 			{
 	// 				vals[i + 0 * nPoint] = -vals_m[i];
@@ -1161,7 +1150,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	// 			break;
 	// 		default:
 	// 			PetscInt *col = new PetscInt[2 * nPoint];
-	// 			PetscScalar *vals = new PetscScalar[2 * nPoint];
+	// 			PetscReal *vals = new PetscReal[2 * nPoint];
 	// 			for(int i = 0; i < nPoint; i++)
 	// 			{
 	// 				vals[i + 0 * nPoint] = -vals_m[i];
@@ -1184,9 +1173,9 @@ void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
 	PetscInt ind_point, ind_var, ind_time;
     PetscInt row, start, end;  
 	PetscInt *col = new PetscInt[nPoint];
-	PetscScalar *vals = new PetscScalar[nPoint];
-	const PetscScalar *vals_m;
-	PetscScalar scale;
+	PetscReal *vals = new PetscReal[nPoint];
+	const PetscReal *vals_m;
+	PetscReal scale;
 	
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, ctrl_num * nPoint * nTstep);
@@ -1223,6 +1212,208 @@ void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
     MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+}
+
+void TransportOpt2D::TangentMatSetup()
+{
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+
+	/// A11
+	FormMatrixA11(M,K,Asubmat[0]);  // need debug
+	MatAssemblyBegin(Asubmat[0], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[0], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA11.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[0],viewer);
+
+	// A12 & A21 // No problem
+	FormMatrixA12(M,K,Asubmat[1]);  // need debug
+	MatAssemblyBegin(Asubmat[1], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[1], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA12.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[1],viewer);
+	MatTranspose(Asubmat[1],MAT_INITIAL_MATRIX,&Asubmat[3]); //correct
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA21.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[3],viewer);
+
+	// A13 & A31 // No problem
+	FormMatrixA13(M,K,P,Asubmat[2]);  // need debug
+	MatAssemblyBegin(Asubmat[2], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[2], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA13.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[2],viewer);
+	MatTranspose(Asubmat[2],MAT_INITIAL_MATRIX,&Asubmat[6]); //correct
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA31.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[6],viewer);
+
+	// A22  // No problem
+	FormMatrixA22(M,K,Asubmat[4]);  
+	MatAssemblyBegin(Asubmat[4], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[4], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA22.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[4],viewer);
+
+	// A23 & A32 // No problem
+	FormMatrixA23(M,K,Asubmat[5]); 
+	MatAssemblyBegin(Asubmat[5], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[5], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA23.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[5],viewer);
+	MatTranspose(Asubmat[5],MAT_INITIAL_MATRIX,&Asubmat[7]);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA32.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[7],viewer);
+
+	// A33 // No problem
+	FormMatrixA33(M,K,Asubmat[8]);  // need debug
+	MatAssemblyBegin(Asubmat[8], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[8], MAT_FINAL_ASSEMBLY);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA33.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(Asubmat[8],viewer);
+
+
+
+	MatCreateNest(PETSC_COMM_WORLD, 3, NULL, 3, NULL, Asubmat, &TanMat);
+
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/TanMat.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(TanMat,viewer);
+
+    PetscPrintf(PETSC_COMM_WORLD,  "finish Tangent Mat\n");
+
+}
+
+void TransportOpt2D::FormResVecb1()
+{
+	Vec vec_tmp0, vec_tmp1, vec_tmp2;
+	VecDuplicate(Y_d, &bsub[0]);
+	VecDuplicate(Y_d, &vec_tmp0);
+	VecDuplicate(Y_d, &vec_tmp1);
+	VecDuplicate(Y_d, &vec_tmp2);
+	// VecCreateMPI();
+
+	VecWAXPY(vec_tmp0, -1.0, Y_k, Y_d); //y_d - y_k
+	MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = A11 * (y_d-y_k)
+
+	MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = A11 * (y_d-y_k) - A13 * l_k
+
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB1.output",&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = VecView(bsub[0],viewer);
+
+}
+void TransportOpt2D::FormResVecb2()
+{
+	Vec vec_tmp0, vec_tmp1, vec_tmp2;
+
+	VecDuplicate(U_k, &bsub[1]);
+	VecDuplicate(U_k, &vec_tmp0);
+	VecDuplicate(U_k, &vec_tmp1);
+	VecDuplicate(U_k, &vec_tmp2);
+
+	MatMult(Asubmat[4], U_k, vec_tmp1); //A22 * u_k
+	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A22 * u_k
+
+	MatMult(Asubmat[5], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	VecWAXPY(bsub[1], -1.0, vec_tmp1, vec_tmp0); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
+
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB2.output",&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = VecView(bsub[1],viewer);
+}
+void TransportOpt2D::FormResVecb3()
+{
+	Vec vec_tmp0, vec_tmp1, vec_tmp2, vec_tmp3;
+	VecDuplicate(L_k, &vec_tmp0);
+	VecDuplicate(L_k, &vec_tmp1);
+	VecDuplicate(L_k, &vec_tmp2);
+	VecDuplicate(L_k, &vec_tmp3);
+	VecDuplicate(L_k, &bsub[2]);
+
+	MatMult(Asubmat[6], Y_k, vec_tmp1); //A31 * y_k
+	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A31 * y_k
+
+	MatMult(Asubmat[7], U_k, vec_tmp2); //A32 * u_k
+	VecScale(vec_tmp2, -1.0); // vec_tmp2 = -A32 * u_k
+
+	VecCopy(Res_nl, vec_tmp3);
+	VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
+	VecWAXPY(bsub[2], 1.0, vec_tmp0, vec_tmp3); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
+
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB3.output",&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = VecView(bsub[2],viewer);
+
+}
+
+void TransportOpt2D::ResidualVecSetup()
+{
+    FormResVecb1();
+	FormResVecb2();
+	FormResVecb3();
+
+	PetscInt low, high, ldim, iglobal, i, k;
+	PetscReal val, *array;
+	PetscInt shift[3] = {0, state_num * nTstep * nPoint, (state_num + ctrl_num) * nTstep * nPoint};
+
+
+	// VecGetOwnershipRange(bsub[0], &low, &high);
+	// VecGetLocalSize(bsub[0], &ldim);
+	// VecGetArray(bsub[0], &array);
+
+	// for(i = 0; i < ldim; i ++)
+	// {
+	// 	val  = array[i];
+	// 	iglobal = i + low;
+	// 	VecSetValues(ResVec, 1, &iglobal, &val, INSERT_VALUES);
+	// }
+
+	for (k = 0; k < 3; k++)
+	{
+		VecGetOwnershipRange(bsub[k], &low, &high);
+		VecGetLocalSize(bsub[k], &ldim);
+		VecGetArray(bsub[k], &array);
+
+		for (i = 0; i < ldim; i++)
+		{
+			val = array[i];
+			iglobal = i + low + shift[k];
+			VecSetValues(ResVec, 1, &iglobal, &val, INSERT_VALUES);
+		}
+	}
+	VecAssemblyBegin(ResVec);
+	VecAssemblyEnd(ResVec);
+
+	// VecCreate(PETSC_COMM_WORLD, &ResVec);
+	// VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
+	// VecSetFromOptions(ResVec);
+	
+	// VecCreateNest(PETSC_COMM_WORLD, 3, NULL, bsub, &ResVec);
+	// PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vec\n");
+
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/ResVec.output",&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = VecView(ResVec,viewer);
+
+    PetscPrintf(PETSC_COMM_WORLD,  "finish Tangent Mat\n");
+
 }
 
 void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node)
@@ -1288,18 +1479,21 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 					ComputeStiffMatrix(dNdx, detJ, Ktmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
+
+					ComputeResVector(Nx, dNdx, bzmesh_process[e].IEN, detJ);
 					// Tangent(Nx, dNdx, dudx, detJ, v_node, Ke);
 					// Residual(Nx, dNdx, dN2dx2, dudx, detJ, v_node, Re);
 			}
 		}
 
 		/*Start element vector assembly*/
+		
+	
+		/*Start element matrix assembly*/
 		MatrixAssembly(Mtmp, bzmesh_process[e].IEN, M);
 		MatrixAssembly(Ktmp, bzmesh_process[e].IEN, K);
 		MatrixAssembly(Pxtmp, bzmesh_process[e].IEN, P[0]);
 		MatrixAssembly(Pytmp, bzmesh_process[e].IEN, P[1]);
-	
-		/*Start element matrix assembly*/
 		// TangentAssembly(Ke, bzmesh_process[e].IEN, GK);
 	
 		// /*Apply Boundary Condition*/
@@ -1337,6 +1531,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
+	VecAssemblyBegin(Res_nl);
 	// VecAssemblyBegin(GR);
 	// MatAssemblyBegin(GK, MAT_FINAL_ASSEMBLY);	
 }
@@ -1383,6 +1578,8 @@ void TransportOpt2D::Run(const vector<Vertex2D>& cpts, const vector<Element2D>& 
 		MatZeroEntries(K);
 		MatZeroEntries(P[0]);
 		MatZeroEntries(P[1]);
+		VecSet(Res_nl, 0.0);
+		
 		// VecSet(GR, 0);		
 		t0 = time(NULL);
 		BuildLinearSystemProcess(cpts, velocity_bc, Vel, Pre);
@@ -1392,128 +1589,69 @@ void TransportOpt2D::Run(const vector<Vertex2D>& cpts, const vector<Element2D>& 
 		MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
 		MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
 		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
+		VecAssemblyEnd(Res_nl);
 
-		PetscViewer viewer;
-    	PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-
-    	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matM.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = MatView(M,viewer);
-		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matK.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = MatView(K,viewer);
-		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPx.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = MatView(P[0],viewer);
-		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPy.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = MatView(P[1],viewer);
-
+		// PetscViewer viewer;
+    	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+    	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matM.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(M,viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matK.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(K,viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPx.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(P[0],viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPy.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(P[1],viewer);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
 
-
-		/// A11
-		FormMatrixA11(M,K,Asubmat[0]);  // need debug
-		MatAssemblyBegin(Asubmat[0], MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(Asubmat[0], MAT_FINAL_ASSEMBLY);
-		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA11.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = MatView(Asubmat[0],viewer);
-
-		/// A12 & A21 // No problem
-		// FormMatrixA12(M,K,Asubmat[1]);  // need debug
-		// MatAssemblyBegin(Asubmat[1], MAT_FINAL_ASSEMBLY);
-		// MatAssemblyEnd(Asubmat[1], MAT_FINAL_ASSEMBLY);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA12.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[1],viewer);
-		// MatTranspose(Asubmat[1],MAT_INITIAL_MATRIX,&Asubmat[3]); //correct
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA21.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[3],viewer);
-
-		/// A13 & A31 // No problem
-		// FormMatrixA13(M,K,P,Asubmat[2]);  // need debug
-		// MatAssemblyBegin(Asubmat[2], MAT_FINAL_ASSEMBLY);
-		// MatAssemblyEnd(Asubmat[2], MAT_FINAL_ASSEMBLY);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA13.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[2],viewer);
-		// MatTranspose(Asubmat[2],MAT_INITIAL_MATRIX,&Asubmat[6]); //correct
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA31.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[6],viewer);
-
-		/// A22  // No problem
-		// FormMatrixA22(M,K,Asubmat[4]);  
-		// MatAssemblyBegin(Asubmat[4], MAT_FINAL_ASSEMBLY);
-		// MatAssemblyEnd(Asubmat[4], MAT_FINAL_ASSEMBLY);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA22.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[4],viewer);
-
-		/// A23 & A32 // No problem
-		// FormMatrixA23(M,K,Asubmat[5]); 
-		// MatAssemblyBegin(Asubmat[5], MAT_FINAL_ASSEMBLY);
-		// MatAssemblyEnd(Asubmat[5], MAT_FINAL_ASSEMBLY);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA23.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[5],viewer);
-		// MatTranspose(Asubmat[5],MAT_INITIAL_MATRIX,&Asubmat[7]);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA32.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[7],viewer);
-
-		/// A33 // No problem
-		// FormMatrixA33(M,K,Asubmat[8]);  // need debug
-		// MatAssemblyBegin(Asubmat[8], MAT_FINAL_ASSEMBLY);
-		// MatAssemblyEnd(Asubmat[8], MAT_FINAL_ASSEMBLY);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA33.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(Asubmat[8],viewer);
-
-
+		TangentMatSetup();
+		ResidualVecSetup();
 		
+		t1 = time(NULL);
+		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
+		MPI_Barrier(comm);
+		PetscPrintf(PETSC_COMM_WORLD, "Solving...\n");
 
-
-
-
-
-
-
-
-
-
-		// // FormMatrixA31(M,K,P,Asubmat[6]);
-		// // FormMatrixA21(M,K,Asubmat[3]);
-		// // FormMatrixA32(M,K,Asubmat[7]);
+		t0 = time(NULL);
 		
-
-		
-		// t1 = time(NULL);
-		// PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
-		// MPI_Barrier(comm);
-		// PetscPrintf(PETSC_COMM_WORLD, "Solving...\n");
-
-
-		
-		// t0 = time(NULL);
-		// /*Petsc KSP solver setting*/
-		// KSPCreate(PETSC_COMM_WORLD, &ksp);
-		// KSPReset(ksp);
-		// KSPSetOperators(ksp, GK, GK);		
+		/*Petsc KSP solver setting*/
+		KSPCreate(PETSC_COMM_WORLD, &ksp);
+		KSPSetOperators(ksp, TanMat, TanMat);
 		// KSPGetPC(ksp, &pc);
-		// PCSetType(pc, PCBJACOBI);
+		// {
+		// 	MatNestGetISs(TanMat, isg, NULL);
+		// 	PCFieldSplitSetIS(pc, "y", isg[0]);
+		// 	PCFieldSplitSetIS(pc, "u", isg[1]);
+		// 	PCFieldSplitSetIS(pc, "l", isg[2]);		
+
+		// 	// PetscViewer viewer;
+    	// 	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+    	// 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/isg1.output",&viewer);
+    	// 	// ierr = PetscViewerPushFormat(viewer,format);
+		// 	// //  ISView(isg[0],viewer);
+		// 	// // ISView(isg[0],iewer);
+		// 	//   ISView(isg[2],viewer);
+		// 	// //    ISView(isg[2],PETSC_VIEWER_STDOUT_WORLD);
+		// }
+		// PCSetType(pc, PCFIELDSPLIT);
+		// PCSetUp(pc);
+				
+		
 		// KSPSetType(ksp, KSPGMRES);
-		// KSPGMRESSetRestart(ksp, 500);
-		// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+
 		// KSP *subksp;
 		// PC subpc;
 		// PetscInt first,nlocal;
 		// KSPSetTolerances(ksp, 1.e-7, PETSC_DEFAULT, PETSC_DEFAULT, 100000);
-		// KSPSetPCSide(ksp, PC_RIGHT);
-		// KSPSetFromOptions(ksp);
-		// KSPSetUp(ksp);
+		// // KSPSetPCSide(ksp, PC_RIGHT);
+		// // KSPSetFromOptions(ksp);
+		// KSPSetType(ksp, KSPGMRES);
+		// KSPGMRESSetRestart(ksp, 500);
+		// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+		KSPSetUp(ksp);
 		// PCBJacobiGetSubKSP(pc, &nlocal, &first, &subksp);
 		// for (int i = 0; i<nlocal; i++) {
 		// 	KSPGetPC(subksp[i], &subpc);		
@@ -1523,23 +1661,37 @@ void TransportOpt2D::Run(const vector<Vertex2D>& cpts, const vector<Element2D>& 
 		// 	KSPSetPCSide(subksp[i], PC_RIGHT);
 		// }
 	
-		// /*Solving the equation*/
-		// KSPSolve(ksp, GR, temp_solution);
-		// KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
-		// PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
-		// PetscInt its;
-		// KSPGetIterationNumber(ksp, &its);
-		// PetscPrintf(PETSC_COMM_WORLD, "iterations %d\n", its);
-		// KSPConvergedReason reason;
-		// KSPGetConvergedReason(ksp, &reason);
-		// PetscPrintf(PETSC_COMM_WORLD, "KSPConvergedReason: %D\n", reason);
-		// t1 = time(NULL);
-		// PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
+		/*Solving the equation*/
+
+		// Vec ResVec_test;
+		// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &ResVec_test);
+		// ierr = VecSet(ResVec_test, 1.0);
+
+		// KSPSolve(ksp, ResVec_test, temp_solution);
+
+		KSPSolve(ksp, ResVec, temp_solution);
+
+		KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
+		PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
+		PetscInt its;
+		KSPGetIterationNumber(ksp, &its);
+		PetscPrintf(PETSC_COMM_WORLD, "iterations %d\n", its);
+		KSPConvergedReason reason;
+		KSPGetConvergedReason(ksp, &reason);
+		PetscPrintf(PETSC_COMM_WORLD, "KSPConvergedReason: %D\n", reason);
+		t1 = time(NULL);
+		PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
+
+		PetscViewer viewer;
+    	PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/temp_solution.output",&viewer);
+    	ierr = PetscViewerPushFormat(viewer,format);
+    	ierr = VecView(temp_solution,viewer);
 
 		// /*Collect the solution from all processors*/
 		// Vec temp_solution_seq;
 		// VecScatter ctx;
-		// PetscScalar    *_a;
+		// PetscReal    *_a;
 		// VecScatterCreateToAll(temp_solution, &ctx, &temp_solution_seq);
 		// VecScatterBegin(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
 		// VecScatterEnd(ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
