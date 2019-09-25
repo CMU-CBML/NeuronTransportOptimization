@@ -8,12 +8,12 @@
 #include <string>
 #include <stdexcept>
 #include "BasicDataStructure.h"
+#include "UserSetting2D.h"
 #include "time.h"
 
 using namespace std;
 
 const int degree = 3;
-const int dim = 2;
 const int state_num = 7;
 const int ctrl_num = 4;
 const int bzpt_num = 16;
@@ -94,10 +94,15 @@ public:
 	TransportOpt2D();
 private:
 	void BodyForce(double x, double y, double &Fx, double &Fy);
+
+	/*MPI computing*/
 	void ReadBezierElementProcess(string fn);
+	void AssignProcessor(const UserSetting2D *ctx);
+
 
 	/*Analysis*/
 	void GaussInfo(int ng);	
+	void InitializeProblem(const UserSetting2D *ctx);
 	void BasisFunction(double u, double v, int nen, const vector<array<double, dim>>& pt, const vector<array<double, bzpt_num>> &cmat, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, double dudx[dim][dim], double& detJ);
 
 	// void BasisFunction(double u, double v, double w, int nen, const vector<array<double, 3>>& pt, const vector<array<double, 64>> &cmat, vector<double> &Nx, vector<array<double, 3>> &dNdx, vector<array<array<double, 3>, 3>> &dN2dx2, double dudx[3][3], double& detJ);
@@ -132,6 +137,8 @@ private:
 	void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);
 	void Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke);
 	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node);
+	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[7], const vector<double> val_ini[18], const vector<double> velocity_node, const vector<double> pressure_node);
+
 	void ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re);
 
 	void MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
@@ -151,6 +158,12 @@ public:
 	void InitializeProblem(const int ndof, const int n_bz, const vector<double>& Vel0, const vector<double>& Pre0, const vector<double>& var);
 	void AssignProcessor(vector<vector<int>> &ele_proc);
 	void Run(const vector<Vertex2D>& cpts, const vector<Element2D>& tmesh, const vector<array<double, 2>>& velocity_bc, string fn);
+
+	
+	void Run(const UserSetting2D *ctx);
+	
+
+
 };
 
 #endif
