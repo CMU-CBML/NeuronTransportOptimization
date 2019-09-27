@@ -7,6 +7,9 @@
         "ostream": "cpp",
         "vector": "cpp",
         "iosfwd": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "random": "cpp"
     }
 }

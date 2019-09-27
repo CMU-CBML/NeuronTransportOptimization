@@ -19,6 +19,8 @@ void UserSetting2D::InitializeUserSetting(string path)
 	string fn_IC_visual(path + "InitialCondition.vtk");
 	string fn_BC(path + "BoundaryCondition.txt");
 	string fn_BC_visual(path + "BoundaryCondition.vtk");
+	string fn_Desire(path + "DesireState.txt");
+	string fn_Desire_visual(path + "DesireState.vtk");
 
 	string fn_velocity(path + "initial_velocityfield.txt");		
 	string fn_parameter(path + "simulation_parameter.txt");
@@ -29,6 +31,7 @@ void UserSetting2D::InitializeUserSetting(string path)
 	ReadMesh(fn_mesh);
 	SetInitialCondition(fn_IC, fn_IC_visual);
 	SetBoundaryCondition(fn_BC, fn_BC_visual);
+	SetDesireState(fn_Desire,fn_Desire_visual);
 	// ReadVelocityField(fn_velocity);
 	AssignProcessor(fn_bz);
 
@@ -75,8 +78,8 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 				{
 					fin >> stmp >> val_ini[i][j];
 				}
-				fin.close();
 			}
+			fin.close();
 		}
 		else
 		{
@@ -107,12 +110,12 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 	PetscPrintf(PETSC_COMM_WORLD, "Set Initial Condition Done！\n");
 }
 
-
 void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 {
 	int i, j;
 	for (i = 0; i < 7; i++)
 		val_bc[i].resize(pts.size());
+	bc_flag.resize(pts.size(), 0);
 	if (ReadBC)
 	{
 		string fname(fn_in), stmp;
@@ -127,8 +130,120 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 				{
 					fin >> stmp >> val_bc[i][j];
 				}
-				fin.close();
+				fin >> stmp >> bc_flag[j];
 			}
+			fin.close();
+		}
+		else
+		{
+			PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
+		}
+	}
+	else
+	{
+		/// For one pipe
+		double eps(1e-6);
+		int count(0);
+		for (i = 0; i < pts.size(); i++)
+		{
+			double vmax = 0.0, vx = 0.0, vy =0.0;
+			vmax = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			vx = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
+			if (abs(pts[i].coor[0] - 0.0) < eps)
+			{
+				/// Concentration
+				val_bc[0][i] = 1.0;
+				val_bc[1][i] = 2.0;
+				val_bc[2][i] = 0.0;
+				/// v+
+				val_bc[3][i] = vx;
+				val_bc[4][i] = vy;
+				// val_bc[3][i] = 1.0;
+				// val_bc[4][i] = 0.0;
+				/// v-
+				//val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
+				///bc_flag
+				bc_flag[i] = -1;
+				continue;
+			}
+			else if (abs(pts[i].coor[0] - 10.0) < eps)
+			{
+				/// Concentration
+				val_bc[0][i] = 1.0;
+				val_bc[1][i] = 0.0;
+				val_bc[2][i] = 2.0;
+				/// v+
+				//val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
+				/// v-
+				// val_bc[5][i] = -1.0;
+				// val_bc[6][i] = 0.0;
+				val_bc[5][i] = -vx;
+				val_bc[6][i] = vy;
+				bc_flag[i] = -2;
+				continue;
+			}
+			else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+			{
+				/// Concentration
+				//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
+				/// v+
+				val_bc[3][i] = 0.0;
+				val_bc[4][i] = 0.0;
+				/// v-
+				val_bc[5][i] = 0.0;
+				val_bc[6][i] = 0.0;
+				bc_flag[i] = -3;
+				continue;
+			}
+			bc_flag[i] = count;
+			count++;
+		}
+		TXTWriteBC(fn_in);
+	}
+
+	SetBoundaryMapping();
+
+	if(VisualizeBC)
+		VTKVisualizeBC(fn_out);
+	PetscPrintf(PETSC_COMM_WORLD, "Set Boundary Condition Done！\n");
+}
+
+void UserSetting2D::SetBoundaryMapping()
+{
+	int i, count(0);
+	for(i=0;i<bc_flag.size();i++)
+	{
+		if(bc_flag[i] >= 0)
+			nonbc_mapping.push_back(i);
+		else
+			bc_mapping.push_back(i);
+	}
+	n_bcpt = bc_mapping.size();
+	cout << "Number of non-BC pts: " << nonbc_mapping.size()<< endl;
+	cout << "Number of BC pts: " << n_bcpt<< endl;
+}
+
+void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
+{
+	int i, j;
+	for (i = 0; i < 7; i++)
+		val_desire[i].resize(pts.size());
+	if (ReadDesire)
+	{
+		string fname(fn_in), stmp;
+		stringstream ss;
+		ifstream fin;
+		fin.open(fname);
+		if (fin.is_open())
+		{
+			for (j = 0; j < pts.size(); j++)
+			{
+				for (i = 0; i < 7; i++)
+				{
+					fin >> stmp >> val_desire[i][j];
+				}
+			}
+			fin.close();
 		}
 		else
 		{
@@ -141,46 +256,17 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		double eps(1e-6);
 		for (i = 0; i < pts.size(); i++)
 		{
-			if (abs(pts[i].coor[0] - 0.0) < eps)
-			{
-				/// Concentration
-				val_bc[0][i] = 1.0;
-				val_bc[1][i] = 2.0;
-				val_bc[2][i] = 0.0;
-				/// v+
-				val_bc[3][i] = 1.0;
-				val_bc[4][i] = 0.0;
-				/// v-
-				//val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
-			}
-			else if (abs(pts[i].coor[0] - 10.0) < eps)
-			{
-				/// Concentration
-				val_bc[0][i] = 1.0;
-				val_bc[1][i] = 0.0;
-				val_bc[2][i] = 2.0;
-				/// v+
-				//val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
-				/// v-
-				val_bc[5][i] = -1.0;
-				val_bc[6][i] = 0.0;
-			}
-			else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
-			{
-				/// Concentration
-				//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
-				/// v+
-				val_bc[3][i] = 0.0;
-				val_bc[4][i] = 0.0;
-				/// v-
-				val_bc[5][i] = 0.0;
-				val_bc[6][i] = 0.0;
-			}
-			TXTWriteBC(fn_in);
+			double vmax = 0.0;
+			vmax = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			val_desire[3][i] = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
+			val_desire[4][i] = 0.0;
+			val_desire[5][i] = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
+			val_desire[6][i] = 0.0;			
 		}
+		TXTWriteDesire(fn_in);
 	}
-	if(VisualizeIC)
-		VTKVisualizeBC(fn_out);
+	if(VisualizeDesire)
+		VTKVisualizeDesire(fn_out);
 	PetscPrintf(PETSC_COMM_WORLD, "Set Boundary Condition Done！\n");
 }
 
@@ -227,16 +313,17 @@ void UserSetting2D::TXTWriteBC(string fn_out)
 		{
 			for (i = 0; i < 7; i++)
 			{
-
-				if (i == 6)
-				{
-					fout << val_bc[i][j] << "\n";
-				}
-				else
-				{
-					fout << val_bc[i][j] << " ";
-				}
+				fout << val_bc[i][j] << " ";
+				// if (i == 6)
+				// {
+				// 	fout << val_bc[i][j] << "\n";
+				// }
+				// else
+				// {
+				// 	fout << val_bc[i][j] << " ";
+				// }
 			}
+			fout << bc_flag[j] << "\n";
 		}
 		fout.close();
 	}
@@ -246,6 +333,31 @@ void UserSetting2D::TXTWriteBC(string fn_out)
 	}
 }
 
+void UserSetting2D::TXTWriteDesire(string fn_out)
+{
+	string fname = fn_out;
+	ofstream fout;
+	fout.open(fname.c_str());
+	unsigned int i, j;
+	if (fout.is_open())
+	{
+		for (j = 0; j < pts.size(); j++)
+		{
+			for (i = 0; i < 7; i++)
+			{
+				if(i!=6)
+					fout << val_desire[i][j] << " ";
+				else
+					fout << val_desire[i][j] << "\n";
+			}
+		}
+		fout.close();
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+}
 
 void UserSetting2D::VTKVisualizeIC(string fn_out)
 {
@@ -331,7 +443,11 @@ void UserSetting2D::VTKVisualizeBC(string fn_out)
 		{
 			fout << "9\n";
 		}
-		fout << "POINT_DATA " << pts.size() << "\nSCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		fout << "POINT_DATA " << pts.size() << "\n";
+		fout << "SCALARS bc_flag float 1\nLOOKUP_TABLE default\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << bc_flag[i] << "\n";
+		fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
 		for (i = 0; i < pts.size(); i++)
 			fout << val_bc[0][i] << "\n";
 		fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
@@ -346,18 +462,54 @@ void UserSetting2D::VTKVisualizeBC(string fn_out)
 		fout << "VECTORS Vminus float\n";
 		for (i = 0; i < pts.size(); i++)
 			fout << val_bc[5][i] << " " << val_bc[6][i] << " " << 0 << "\n";
-		// fout << "VECTORS Fplus float\n";
-		// for (i = 0; i < pts.size(); i++)
-		// 	fout << val_ini[7][i] << " " << val_ini[8][i] << " " << 0 << "\n";
-		// fout << "VECTORS Fminus float\n";
-		// for (i = 0; i < pts.size(); i++)
-		// 	fout << val_ini[9][i] << " " << val_ini[10][i] << " " << 0 << "\n";
-		// for (j = 0; j < 7; j++)
-		// {
-		// 	fout << "SCALARS lambda" << j+1 << " float 1\nLOOKUP_TABLE default\n";
-		// 	for (i = 0; i < pts.size(); i++)
-		// 		fout << val_ini[j + 11][i] << "\n";
-		// }
+		fout.close();
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+}
+
+void UserSetting2D::VTKVisualizeDesire(string fn_out)
+{
+	string fname = fn_out;
+	ofstream fout;
+	fout.open(fname.c_str());
+	unsigned int i, j;
+	if (fout.is_open())
+	{
+		fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+		fout << "POINTS " << pts.size() << " float\n";
+		for (i = 0; i<pts.size(); i++)
+		{
+			fout << pts[i].coor[0] << " " << pts[i].coor[1] << " " << pts[i].coor[2] << "\n";
+		}
+		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+		}
+		fout << "\nCELL_TYPES " << mesh.size() << '\n';
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "9\n";
+		}
+		fout << "POINT_DATA " << pts.size() << "\n";
+		fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << val_desire[0][i] << "\n";
+		fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << val_desire[1][i] << "\n";
+		fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << val_desire[2][i] << "\n";
+		fout << "VECTORS Vplus float\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << val_desire[3][i] << " " << val_desire[4][i] << " " << 0 << "\n";
+		fout << "VECTORS Vminus float\n";
+		for (i = 0; i < pts.size(); i++)
+			fout << val_desire[5][i] << " " << val_desire[6][i] << " " << 0 << "\n";
 		fout.close();
 	}
 	else
@@ -411,7 +563,6 @@ void UserSetting2D::ReadVelocityField(string fn)
 	
 }
 
-
 void UserSetting2D::AssignProcessor(string fn)
 {
 	int tmp;
@@ -437,9 +588,6 @@ void UserSetting2D::AssignProcessor(string fn)
 		PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
 	}
 }
-
-
-
 
 
 void UserSetting2D::SetVariables(string fn_par, vector<double>& var)

@@ -13,36 +13,52 @@
 using namespace std;
 
 const int dim = 2;
+
 const bool ReadIC = false;
 const bool ReadBC = false;
+const bool ReadDesire = false;
+
 const bool VisualizeIC = true;
 const bool VisualizeBC = true;
+const bool VisualizeDesire = true;
 
 //problem setting
 class UserSetting2D
 {
 public:
 	int n_bzmesh;
+	int n_bcpt;
+	int n_bcval;
+
 	vector<vector<int>> ele_process;
 	vector<double> var;
 	vector<Vertex2D> pts;
 	vector<Element2D> mesh;
 	vector<double> val_ini[18];
 	vector<double> val_bc[7];
+	vector<double> val_desire[7];
+	vector<int> bc_flag; // global node index -> index without bc pts 
+	vector<int> nonbc_mapping; // index without bc pts -> global node index
+	vector<int> bc_mapping; // index of bc pts -> global node index
 
 	string work_dir;
 
 
 private:
 	void SetVariables(string fn_par);
+	void SetDesireState(string fn_in, string fn_out);
 	void SetInitialCondition(string fn_in, string fn_out);
 	void SetBoundaryCondition(string fn_in, string fn_out);
+	void SetBoundaryMapping();
 
 	void TXTWriteIC(string fn_out);
 	void TXTWriteBC(string fn_out);
+	void TXTWriteDesire(string fn_out);
 
 	void VTKVisualizeIC(string fn_out);
 	void VTKVisualizeBC(string fn_out);
+	void VTKVisualizeDesire(string fn_out);
+
 	void ReadMesh(string fn);
 	void ReadVelocityField(string fn);
 	void AssignProcessor(string fn);

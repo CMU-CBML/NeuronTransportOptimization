@@ -50,11 +50,13 @@ int main(int argc, char **argv)
 
 		/// New UserSetting2D
 		UserSetting2D *ctx = new UserSetting2D;
-		ctx -> InitializeUserSetting(path);
-
 		TransportOpt2D *transopt2d = new TransportOpt2D;
-		//transopt2d -> InitializeProblem(ctx);
+		
+		ctx -> InitializeUserSetting(path);
 		transopt2d -> Run(ctx);
+
+		//transopt2d -> InitializeProblem(ctx);
+
 		// transopt2d->InitializeProblem(cpts.size(), n_bzmesh, Vel0, Pre0, var);
 		// transopt2d->AssignProcessor(ele_process);
 		//transopt2d->Run(cpts, tmesh, velocity_node, path);
@@ -85,6 +87,10 @@ int main(int argc, char **argv)
 		// 	transopt2d->Run(cpts, tmesh, velocity_node, path);
 		// }
 		PetscPrintf(PETSC_COMM_WORLD, "Done!\n");
+
+		delete ctx;
+		delete transopt2d;
+
 		ierr = PetscFinalize(); CHKERRQ(ierr);
 	}
 	else if (argc > 3) {
