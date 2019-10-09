@@ -260,4 +260,6 @@ paket-files/
 __pycache__/
 *.pyc
 src/*.o
+src_burger/*.o
 src/debug/
+io/**/debug/

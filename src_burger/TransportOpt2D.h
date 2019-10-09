@@ -14,8 +14,8 @@
 using namespace std;
 
 const int degree = 3;
-const int state_num = 7;
-const int ctrl_num = 4;
+const int state_num = 2;
+const int ctrl_num = 2;
 const int bzpt_num = 16;
 
 
@@ -67,7 +67,7 @@ private:
 	// control variables
 	vector<double> f_plus[dim], f_minus[dim];
 	// penalty variables
-	vector<double> lambda[3 + 2 * dim];
+	vector<double> lambda[1 * dim];
 
 	// Unit Np * Np Matrix
 	Mat M, K, P[dim];
@@ -120,9 +120,9 @@ private:
 	void ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& StiffMat);
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
 	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
-	void ComputeResVector(const vector<double> val_ini[18], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ);
+	void ComputeResVector(const vector<double> val_ini[6], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ);
 	void MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
-	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[7], const vector<double> val_ini[18]);
+	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[2], const vector<double> val_ini[6]);
 
 	void GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep);
 	void FormMatrixA11(Mat M, Mat K, Mat &A);
@@ -145,7 +145,7 @@ private:
 	void FormResVecb3();
 	void ResidualVecSetup();
 
-	void ApplyInitialCondition(const vector<double> val_ini[18]);
+	void ApplyInitialCondition(const vector<double> val_ini[6]);
 	void ApplyBoundaryCondition(const UserSetting2D *ctx);
 	void ApplyBoundaryConditionBlock(const UserSetting2D *ctx);
 	//void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);

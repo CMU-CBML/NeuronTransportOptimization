@@ -61,7 +61,7 @@ void UserSetting2D::SetVariables(string fn_par)
 void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 {
 	int i, j;
-	for (i = 0; i < 18; i++)
+	for (i = 0; i < 6; i++)
 		val_ini[i].resize(pts.size());
 
 	if (ReadIC)
@@ -74,7 +74,7 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < 18; i++)
+				for (i = 0; i < 6; i++)
 				{
 					fin >> stmp >> val_ini[i][j];
 				}

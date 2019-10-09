@@ -18,9 +18,9 @@ const bool ReadIC = false;
 const bool ReadBC = false;
 const bool ReadDesire = false;
 
-const bool VisualizeIC = false;
-const bool VisualizeBC = false;
-const bool VisualizeDesire = false;
+const bool VisualizeIC = true;
+const bool VisualizeBC = true;
+const bool VisualizeDesire = true;
 
 //problem setting
 class UserSetting2D
@@ -34,9 +34,9 @@ public:
 	vector<double> var;
 	vector<Vertex2D> pts;
 	vector<Element2D> mesh;
-	vector<double> val_ini[18];
-	vector<double> val_bc[7];
-	vector<double> val_desire[7];
+	vector<double> val_ini[6];
+	vector<double> val_bc[2];
+	vector<double> val_desire[2];
 	vector<int> bc_flag; // global node index -> index without bc pts 
 	vector<int> nonbc_mapping; // index without bc pts -> global node index
 	vector<int> bc_mapping; // index of bc pts -> global node index
@@ -66,6 +66,8 @@ private:
 public:
 	UserSetting2D();
 	void InitializeUserSetting(string fn);
+
+
 
 	void SetVariables(string fn_par, vector<double> &var);
 	void SetInitialCondition(int ndof, vector<double> &Vel0, vector<double> &Pre0, vector<Vertex2D> &pts, const vector<array<double, 2>> velocity_node);

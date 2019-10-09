@@ -1,4 +1,6 @@
 D 10.0
+Dplus 10.0
+Dminus 10.0
 vplus 0.1
 vminus -0.1
 kplus 1.0

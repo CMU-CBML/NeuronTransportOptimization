@@ -253,8 +253,8 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	MPI_Barrier(comm);
 
 	PetscPrintf(PETSC_COMM_WORLD, "Initializing...\n");
-	
-	work_dir = ctx -> work_dir;
+
+	work_dir = ctx->work_dir;
 
 	/*Initialize parameters*/
 	GaussInfo(4);
@@ -264,13 +264,13 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	nPoint = ctx->pts.size();	
 
 	// constant parameters
-	alpha0 = ctx->var[11];
-	alpha1 = ctx->var[12];
-	alpha2 = ctx->var[13];
-	beta1 = ctx->var[14];
-	beta2 = ctx->var[15];
-	dt = ctx->var[16];
-	nTstep = ctx->var[17];
+	alpha0 = ctx->var[9];
+	alpha1 = ctx->var[10];
+	alpha2 = ctx->var[11];
+	beta1 = ctx->var[12];
+	beta2 = ctx->var[13];
+	dt = ctx->var[14];
+	nTstep = ctx->var[15];
 	par = ctx->var;//Dn0, v_plus, v_minus, k+, k-,k'+,k'-
 
 	// state variables
@@ -290,7 +290,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	}
 
 	// penalty variables
-	for(int i = 0; i < 3 + 2 * dim; i++)
+	for(int i = 0; i < state_num; i++)
 		lambda[i].resize(nPoint * nTstep);
 
 	cout << "nPoint: "<< nPoint << endl;
@@ -307,15 +307,13 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(M, 64, NULL, 64, NULL);
 	ierr = MatSetOption(M,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(M); 
-	ierr = PetscObjectSetName((PetscObject) M, "M");
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &K); 
 	ierr = MatSetSizes(K, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(K, MATMPIAIJ);
 	ierr = MatMPIAIJSetPreallocation(K, 64, NULL, 64, NULL);
 	ierr = MatSetOption(K,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
-	ierr = MatSetUp(K);
-	ierr = PetscObjectSetName((PetscObject) K, "K"); 
+	ierr = MatSetUp(K); 
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[0]); 
 	ierr = MatSetSizes(P[0], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
@@ -323,7 +321,6 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(P[0], 64, NULL, 64, NULL);	
 	ierr = MatSetOption(P[0],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[0]); 
-	ierr = PetscObjectSetName((PetscObject) P[0], "Px");
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[1]); 
 	ierr = MatSetSizes(P[1], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
@@ -331,8 +328,6 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(P[1], 64, NULL, 64, NULL);
 	ierr = MatSetOption(P[1],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[1]); 
-	ierr = PetscObjectSetName((PetscObject) P[1], "Py");
-
 
 	// ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
 	// ierr = MatSetUp(GK); 
@@ -352,23 +347,23 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	PetscInt *col_yk, *col_yd;
 	PetscReal *vals_yk, *vals_yd;
 
-	PetscMalloc1(nPoint * 4 * nTstep, &col_yd);
-	PetscMalloc1(nPoint * 4 * nTstep, &vals_yd);
+	PetscMalloc1(nPoint * 2 * nTstep, &col_yd);
+	PetscMalloc1(nPoint * 2 * nTstep, &vals_yd);
 
 	int count = 0;
 	for (int j = 0; j < nTstep; j++)
 	{
 		for (int i = 0; i < nPoint; i++)
 		{
-			for (int k = 0; k < 4; k++)
+			for (int k = 0; k < 2; k++)
 			{
-				col_yd[count] = i + (k + 3) * nPoint + j * state_num * nPoint;
-				vals_yd[count] = ctx->val_desire[k + 3][i];
+				col_yd[count] = i + k * nPoint + j * state_num * nPoint;
+				vals_yd[count] = ctx->val_desire[k][i];
 				count++;
 			}
 		}
 	}
-	VecSetValues(Y_d, nPoint * 4 * nTstep, col_yd, vals_yd, INSERT_VALUES);
+	VecSetValues(Y_d, nPoint * 2 * nTstep, col_yd, vals_yd, INSERT_VALUES);
 	VecAssemblyBegin(Y_d);
 	VecAssemblyEnd(Y_d);
 
@@ -381,11 +376,9 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	for(int i =0; i<ctx->bc_flag.size();i++)
 	{
 		if(ctx->bc_flag[i] == -1)
-			count += 5;
+			count += 2;
 		else if(ctx->bc_flag[i] == -2)
-			count += 5;
-		else if (ctx->bc_flag[i] == -3)
-			count += 4;
+			count += 2;
 	}
 	n_bcval = count;
 
@@ -401,31 +394,25 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			{
 				col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
 				col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
-				col_yk[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				vals_yk[count + 2] = ctx->val_bc[2][i];
-				col_yk[count + 3] = i + 3 * nPoint + j * state_num * nPoint;				vals_yk[count + 3] = ctx->val_bc[3][i];
-				col_yk[count + 4] = i + 4 * nPoint + j * state_num * nPoint;				vals_yk[count + 4] = ctx->val_bc[4][i];
-				count += 5;
+				count += 2;
 				continue;
 			}
 			else if(ctx->bc_flag[i] == -2)
 			{
 				col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
 				col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
-				col_yk[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				vals_yk[count + 2] = ctx->val_bc[2][i];
-				col_yk[count + 3] = i + 5 * nPoint + j * state_num * nPoint;				vals_yk[count + 3] = ctx->val_bc[5][i];
-				col_yk[count + 4] = i + 6 * nPoint + j * state_num * nPoint;				vals_yk[count + 4] = ctx->val_bc[6][i];
-				count += 5;
+				count += 2;
 				continue;
 			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				col_yk[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[3][i];
-				col_yk[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[4][i];
-				col_yk[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				vals_yk[count + 2] = ctx->val_bc[5][i];
-				col_yk[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				vals_yk[count + 3] = ctx->val_bc[6][i];
-				count += 4;
-				continue;
-			}
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	col_yk[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[3][i];
+			// 	col_yk[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[4][i];
+			// 	col_yk[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				vals_yk[count + 2] = ctx->val_bc[5][i];
+			// 	col_yk[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				vals_yk[count + 3] = ctx->val_bc[6][i];
+			// 	count += 4;
+			// 	continue;
+			// }
 		}
 	}
 	VecSetValues(Y_k, count, col_yk, vals_yk, INSERT_VALUES);
@@ -435,7 +422,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	PetscFree(vals_yk);
 	delete col_yk, vals_yk;
 	cout << "Set Y_k Done!\n";
-	// DebugVisualizeVec(Y_k, work_dir + "debug/Y_k.m");
+	DebugVisualizeVec(Y_k, work_dir + "debug/Y_k.output");
 
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Res_nl);
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &temp_solution);
@@ -814,7 +801,7 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[18], vector<d
 	{
 		for (int i = 0; i < nen; i++)
 		{
-			if (j != 0)
+			if (j == 0)
 			{
 				int A = IEN[i] + (j - 1) * nPoint;
 				n0_node[i] = n0[A];
@@ -996,8 +983,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
 	MatGetOwnershipRange(A,&start,&end);
-	PetscObjectSetName((PetscObject) A, "Asub11");
-
+	
 	for(row = start; row < end; row++)
 	{
         PetscInt ind_point, ind_var, ind_time;
@@ -1024,107 +1010,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 		
 		switch (ind_var)
 		{
-		// case 0:
-		// 	ncols_a = ncols_k;
-		// 	PetscMalloc1(ncols_a, &col);
-		// 	PetscMalloc1(ncols_a, &vals);
-		// 	for(int i = 0; i < ncols_a; i++)
-		// 	{
-		// 		vals[i] = vals_k[i];
-		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-		// 	}
-		// 	scale = alpha0;
-		// 	break;
-		// case 1:
-		// 	// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-		// 	ncols_a = ncols_k;
-		// 	PetscMalloc1(ncols_a, &col);
-		// 	PetscMalloc1(ncols_a, &vals);
-		// 	for(int i = 0; i < ncols_a; i++)
-		// 	{
-		// 		vals[i] = vals_k[i];
-		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-		// 	}
-		// 	scale = alpha1;
-		// 	break;
-		// case 2:
-		// 	// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-		// 	ncols_a = ncols_k;
-		// 	PetscMalloc1(ncols_a, &col);
-		// 	PetscMalloc1(ncols_a, &vals);
-		// 	for(int i = 0; i < ncols_a; i++)
-		// 	{
-		// 		vals[i] = vals_k[i];
-		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-		// 	}
-		// 	scale = alpha2;
-		// 	break;
-
 		case 0:
-			ncols_a = ncols_m;
-			PetscMalloc1(ncols_a, &col);
-			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
-			{
-				vals[i] = vals_k[i] + alpha0 * vals_m[i] ;
-				// vals[i] =  vals_k[i];
-				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			}
-			// scale = alpha0;
-			break;
-		case 1:
-			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_m;
-			PetscMalloc1(ncols_a, &col);
-			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
-			{
-				vals[i] = vals_k[i] + alpha1 * vals_m[i];
-				// vals[i] = alpha1 * vals_k[i];
-				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			}
-			// scale = alpha1;
-			break;
-		case 2:
-			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_m;
-			PetscMalloc1(ncols_a, &col);
-			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
-			{
-				vals[i] = vals_k[i] + alpha2 *vals_m[i];
-				// vals[i] = alpha2 * vals_k[i];
-				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			}
-			// scale = alpha2;
-			break;
-		case 3:
-			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_m;
-			PetscMalloc1(ncols_a, &col);
-			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
-			{
-				vals[i] = vals_m[i];
-				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			}
-			// scale = beta1;
-			// scale = 1.0;
-			break;
-		case 4:
-			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_m;
-			PetscMalloc1(ncols_a, &col);
-			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
-			{
-				vals[i] = vals_m[i];
-				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			}
-			// scale = beta1;
-			// scale = 1.0;
-			break;
-		case 5:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
 			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
@@ -1137,7 +1023,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 			// scale = beta2;
 			// scale = 1.0;
 			break;
-		case 6:
+		case 1:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
 			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
@@ -1193,7 +1079,6 @@ void TransportOpt2D::FormMatrixA12(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub12");
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
@@ -1207,7 +1092,6 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint * 7, NULL, nPoint * 7, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub13");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1378,7 +1262,6 @@ void TransportOpt2D::FormMatrixA21(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub21");
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
@@ -1392,7 +1275,6 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub22");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1427,12 +1309,6 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
 		case 1:
 			scale = beta1;
 			break;
-		case 2:
-			scale = beta2;
-			break;
-		case 3:
-			scale = beta2;
-			break;
 		default:
 			break;
 		}
@@ -1466,7 +1342,6 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub23");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1488,7 +1363,7 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 		for(int i = 0; i < ncols_m; i++)
 		{
 			vals[i] = vals_m[i]*scale;
-			col[i] = cols_m[i] + (ind_var + 3) * nPoint + ind_time * nPoint * state_num;
+			col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 		}
 			
 		MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
@@ -1511,9 +1386,8 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
     MatSetType(A,MATMPIAIJ);
-    MatMPIAIJSetPreallocation(A, nPoint * 7, NULL, nPoint * 7, NULL);
+    MatMPIAIJSetPreallocation(A, nPoint * 2, NULL, nPoint * 2, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub31");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1548,135 +1422,30 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 			case 0:
 				// PetscInt *col = new PetscInt[4 * nPoint];
 				// PetscReal *vals = new PetscReal[4 * nPoint];
-				PetscMalloc1(4 * ncols_m, &col);
-				PetscMalloc1(4 * ncols_m, &vals);
+				PetscMalloc1(2 * ncols_m, &col);
+				PetscMalloc1(2 * ncols_m, &vals);
 				for(int i = 0; i < ncols_m; i++)
 				{
 					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[5] + dt * par[6]);
-					vals[i + 2 * ncols_m] = vals_m[i] * (-dt * par[7]);
-					vals[i + 3 * ncols_m] = vals_m[i] * (-dt * par[8]);
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
 					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + (ind_time - 1) * nPoint * state_num;
 					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-					col[i + 2 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
-					col[i + 3 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num; 
 				}
-				MatSetValues(A, 1, &row, ncols_m * 4, col, vals, INSERT_VALUES);
+				MatSetValues(A, 1, &row, ncols_m * 2, col, vals, INSERT_VALUES);
 				// PetscFree(col);
 				// PetscFree(vals);
 				break;
 			case 1:
-				PetscMalloc1(3 * ncols_m, &col);
-				PetscMalloc1(3 * ncols_m , &vals);
+				PetscMalloc1(2 * ncols_m, &col);
+				PetscMalloc1(2 * ncols_m , &vals);
 				for( int i=0;i<ncols_m;i++)
 				{
 					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[5]) ;
-					vals[i + 2 * ncols_m] = vals_m[i] * (1 + dt * par[7]) + vals_k[i] * (dt * par[1]);
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
 					col[i + 0 * ncols_m] = cols_m[i] + 1 * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
 					col[i + 2 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
 				}
-				MatSetValues(A, 1, &row, (3 * ncols_m), col, vals, INSERT_VALUES);
-				break;
-			case 2:
-				PetscMalloc1(3 * ncols_m, &col);
-				PetscMalloc1(3 * ncols_m , &vals);
-				for( int i=0;i<ncols_m;i++)
-				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[6]) ;
-					vals[i + 2 * ncols_m] = vals_m[i] * (1 + dt * par[8]) + vals_k[i] * (dt * par[2]);
-					col[i + 0 * ncols_m] = cols_m[i] + 2 * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-					col[i + 2 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, (3 * ncols_m), col, vals, INSERT_VALUES);
-				break;
-			case 3:
-				PetscMalloc1(2 * ncols_m + ncols_px,  &col);
-				PetscMalloc1(2 * ncols_m + ncols_px, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_px; i++)
-				{
-					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 2 * ncols_m] = cols_px[i] + 1 * nPoint + ind_time * nPoint * state_num;
-				}
-
-				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_px, col, vals, INSERT_VALUES);
-				break;
-			case 4:
-				PetscMalloc1(2 * ncols_m + ncols_py, &col);
-				PetscMalloc1(2 * ncols_m + ncols_py, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for( int i=0;i<ncols_py;i++)
-				{
-					vals[i + 2 * ncols_m] = vals_py[i] * dt * par[9] * par[9];
-					col[i + 2 * ncols_m] = cols_py[i]  + 1 * nPoint + ind_time * nPoint * state_num; 
-				}
-
-				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_py, col, vals, INSERT_VALUES);
-				break;
-			case 5:
-				PetscMalloc1(2 * ncols_m + ncols_px, &col);
-				PetscMalloc1(2 * ncols_m + ncols_px, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_px; i++)
-				{
-					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 2 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_px, col, vals, INSERT_VALUES);
-				break;
-			case 6:
-				PetscMalloc1(2 * ncols_m + ncols_py, &col);
-				PetscMalloc1(2 * ncols_m+ ncols_py, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_py; i++)
-				{
-					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 2 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_py, col, vals, INSERT_VALUES);
-				break;
-			// default:
-
-			// 	PetscMalloc1(2 * ncols_m, &col);
-			// 	PetscMalloc1(2 * ncols_m, &vals);
-			// 	for(int i = 0; i < ncols_m; i++)
-			// 	{
-			// 		vals[i + 0 * ncols_m] = -vals_m[i];
-			// 		vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
-			// 		col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-			// 		col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-			// 	}
-			// 	MatSetValues(A, 1, &row, 2 * ncols_m, col, vals, INSERT_VALUES);
-				// PetscFree(col);
-				// PetscFree(vals);
+				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
 				break;
 			}
 		}
@@ -1687,108 +1456,27 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 			case 0:
 				// PetscInt *col = new PetscInt[4 * nPoint];
 				// PetscReal *vals = new PetscReal[4 * nPoint];
-				PetscMalloc1(3 * ncols_m, &col);
-				PetscMalloc1(3 * ncols_m, &vals);
+				PetscMalloc1(1 * ncols_m, &col);
+				PetscMalloc1(1 * ncols_m, &vals);
 				for(int i = 0; i < ncols_m; i++)
 				{
-					vals[i + 0 * ncols_m] = vals_m[i] * (1 + dt * par[5] + dt * par[6]);
-					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[7]);
-					vals[i + 2 * ncols_m] = vals_m[i] * (-dt * par[8]);
-					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
-					col[i + 2 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num; 
+					vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
+					col[i] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
 				}
-				MatSetValues(A, 1, &row, ncols_m * 3, col, vals, INSERT_VALUES);
+				MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
 				// PetscFree(col);
 				// PetscFree(vals);
 				break;
 			case 1:
-				PetscMalloc1(2 * ncols_m, &col);
-				PetscMalloc1(2 * ncols_m , &vals);
+				PetscMalloc1(1 * ncols_m, &col);
+				PetscMalloc1(1 * ncols_m , &vals);
 				for( int i=0;i<ncols_m;i++)
 				{
-					vals[i + 0 * ncols_m] = vals_m[i] * (-dt * par[5]);
-					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[7]) + vals_k[i] * (dt * par[1]);
-					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
+					col[i] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
 				}
-				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
+				MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
 				break;
-			case 2:
-				PetscMalloc1(2 * ncols_m, &col);
-				PetscMalloc1(2 * ncols_m , &vals);
-				for( int i=0;i<ncols_m;i++)
-				{
-					vals[i + 0 * ncols_m] = vals_m[i] * (-dt * par[6]);
-					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[8]) + vals_k[i] * (dt * par[2]);
-					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
-				break;
-			case 3:
-				PetscMalloc1(ncols_m + ncols_px,  &col);
-				PetscMalloc1(ncols_m + ncols_px, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_px; i++)
-				{
-					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 1 * ncols_m] = cols_px[i] + 1 * nPoint + ind_time * nPoint * state_num;
-				}
-
-				MatSetValues(A, 1, &row, ncols_m + ncols_px, col, vals, INSERT_VALUES);
-				break;
-			case 4:
-				PetscMalloc1(ncols_m + ncols_py, &col);
-				PetscMalloc1(ncols_m + ncols_py, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for( int i=0;i<ncols_py;i++)
-				{
-					vals[i + 1 * ncols_m] = vals_py[i] * dt * par[9] * par[9];
-					col[i + 1 * ncols_m] = cols_py[i]  + 1 * nPoint + ind_time * nPoint * state_num; 
-				}
-
-				MatSetValues(A, 1, &row, ncols_m + ncols_py, col, vals, INSERT_VALUES);
-				break;
-			case 5:
-				PetscMalloc1(ncols_m + ncols_px, &col);
-				PetscMalloc1(ncols_m + ncols_px, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_px; i++)
-				{
-					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 1 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, ncols_m + ncols_px, col, vals, INSERT_VALUES);
-				break;
-			case 6:
-				PetscMalloc1(ncols_m + ncols_py, &col);
-				PetscMalloc1(ncols_m+ ncols_py, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[10] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
-				}
-				for (int i = 0; i < ncols_py; i++)
-				{
-					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[9] * par[9];
-					col[i + 1 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, ncols_m + ncols_py, col, vals, INSERT_VALUES);
-				break;
-
 			}
 		}
 		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
@@ -1814,24 +1502,21 @@ void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
-	PetscObjectSetName((PetscObject) A, "Asub32");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
 	{
         GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
-		if(ind_var >= 3)
+		MatGetRow(M,ind_point,NULL,NULL,&vals_m);
+		scale = dt;
+		for(int i = 0; i < nPoint; i++)
 		{
-			MatGetRow(M,ind_point,NULL,NULL,&vals_m);
-			scale = -dt;
-			for(int i = 0; i < nPoint; i++)
-			{
-				vals[i] = vals_m[i]*scale;
-				col[i] = i + (ind_var - 3) * nPoint + ind_time * nPoint * ctrl_num;
-			}
-			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
-			MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+			vals[i] = vals_m[i]*scale;
+			col[i] = i + ind_var * nPoint + ind_time * nPoint * ctrl_num;
 		}
+		MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
+		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+
 	}
 
 	delete col;
@@ -1844,18 +1529,17 @@ void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 1, NULL, 0, NULL);
-	PetscObjectSetName((PetscObject) A, "Asub33");
 	MatSetUp(A);
 
-	// //explicitly set diagonal to be zero
-	// PetscInt row, start, end;  
-	// MatGetOwnershipRange(A,&start,&end);
-	// for(row = start; row < end; row++)
-	// 	MatSetValue(A, row, row, 0.0, INSERT_VALUES);
+	//explicitly set diagonal to be zero
+	PetscInt row, start, end;  
+	MatGetOwnershipRange(A,&start,&end);
+	for(row = start; row < end; row++)
+		MatSetValue(A, row, row, 0.0, INSERT_VALUES);
 
 
-	// // MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
-    // // MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+	// MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    // MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
 
 void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
@@ -1874,31 +1558,25 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 			{
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
 				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
-				bc_global_ids[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[2][i]-ctx->val_bc[2][i];
-				bc_global_ids[count + 3] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
-				bc_global_ids[count + 4] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 4] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
-				count += 5;
+				count += 2;
 				continue;
 			}
 			else if(ctx->bc_flag[i] == -2)
 			{
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
 				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
-				bc_global_ids[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[2][i]-ctx->val_bc[2][i];
-				bc_global_ids[count + 3] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
-				bc_global_ids[count + 4] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 4] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
-				count += 5;
+				count += 2;
 				continue;
 			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
-				bc_global_ids[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
-				bc_global_ids[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
-				bc_global_ids[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
-				count += 4;
-				continue;
-			}
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
+			// 	bc_global_ids[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
+			// 	bc_global_ids[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
+			// 	bc_global_ids[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
+			// 	count += 4;
+			// 	continue;
+			// }
 		}
 	}
 
@@ -2009,8 +1687,6 @@ void TransportOpt2D::ApplyInitialCondition(const vector<double> val_ini[18])
 
 void TransportOpt2D::Debug()
 {
-
-
 	cout << "Debug output Done!" <<endl;
 
 	getchar();
@@ -2042,7 +1718,7 @@ void TransportOpt2D::TangentMatSetup()
 	MatTranspose(Asubmat[6],MAT_INITIAL_MATRIX,&Asubmat[2]); //correct
 
 	// DebugVisualizeMat(Asubmat[2], work_dir + "debug/matA13.output");
-	// DebugVisualizeMat(Asubmat[6], work_dir + "debug/matA31.m");
+	DebugVisualizeMat(Asubmat[6], work_dir + "debug/matA31.m");
 
 
 	// A22  // No problem
@@ -2069,14 +1745,18 @@ void TransportOpt2D::TangentMatSetup()
 	// DebugVisualizeMat(Asubmat[8], work_dir + "debug/matA33.output");
 
 	MatCreateNest(PETSC_COMM_WORLD, 3, NULL, 3, NULL, Asubmat, &TanMat_tmp);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/TanMat_tmp.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(TanMat_tmp,viewer);
 
 	PetscPrintf(PETSC_COMM_WORLD,  "Tangent Mat Convert Done!\n");
 	
 	MatConvert(TanMat_tmp, MATMPIAIJ, MAT_INITIAL_MATRIX,&TanMat);
-	// MatConvert(TanMat_tmp, MATSEQAIJ, MAT_INITIAL_MATRIX,&TanMat);
 	// MatSetUp(TanMat);
-	PetscObjectSetName((PetscObject) TanMat, "TanMat");
 
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/TanMat.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(TanMat,viewer);
 
 	DebugVisualizeMat(TanMat, work_dir + "debug/TanMat_beforeBC.m");
     
@@ -2143,6 +1823,7 @@ void TransportOpt2D::FormResVecb1()
 	VecDuplicate(Y_d, &vec_tmp0);
 	VecDuplicate(Y_d, &vec_tmp1);
 	VecDuplicate(Y_d, &vec_tmp2);
+	// VecCreateMPI();
 
 	VecWAXPY(vec_tmp0, -1.0, Y_k, Y_d); //-(y_k - y_d)
 	MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = -A11 * (y_k-y_d)
@@ -2150,8 +1831,8 @@ void TransportOpt2D::FormResVecb1()
 	MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A11 * (y_k-y_d) - A13 * l_k
 	PetscObjectSetName((PetscObject) bsub[0], "bsub1");
-}
 
+}
 void TransportOpt2D::FormResVecb2()
 {
 	Vec vec_tmp0, vec_tmp1, vec_tmp2;
@@ -2164,9 +1845,10 @@ void TransportOpt2D::FormResVecb2()
 	MatMult(Asubmat[4], U_k, vec_tmp1); //A22 * u_k
 	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A22 * u_k
 
-	MatMult(Asubmat[5], L_k, vec_tmp2); // vec_tmp2 = A23 * l_k
+	MatMult(Asubmat[5], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[1], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
 	PetscObjectSetName((PetscObject) bsub[1], "bsub2");
+
 }
 
 void TransportOpt2D::FormResVecb3()
@@ -2188,6 +1870,7 @@ void TransportOpt2D::FormResVecb3()
 	VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
 	VecWAXPY(bsub[2], 1.0, vec_tmp0, vec_tmp3); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
 	PetscObjectSetName((PetscObject) bsub[2], "bsub3");
+
 }
 
 void TransportOpt2D::ResidualVecSetup()
@@ -2232,8 +1915,6 @@ void TransportOpt2D::ResidualVecSetup()
 	}
 	VecAssemblyBegin(ResVec);
 	VecAssemblyEnd(ResVec);
-
-	PetscObjectSetName((PetscObject) ResVec, "ResVec");
 
 	// VecCreate(PETSC_COMM_WORLD, &ResVec);
 	// VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
@@ -2281,13 +1962,6 @@ void TransportOpt2D::DebugSubMat()
 	MatCreateSubMatrix(TanMat, isg[0], isg[1],  MAT_INITIAL_MATRIX, &Asub[1]);
 	MatCreateSubMatrix(TanMat, isg[1], isg[0],  MAT_INITIAL_MATRIX, &Asub[2]);
 	MatCreateSubMatrix(TanMat, isg[1], isg[1],  MAT_INITIAL_MATRIX, &Asub[3]);
-
-	ierr = PetscObjectSetName((PetscObject) Asub[0], "TanMat00");
-	ierr = PetscObjectSetName((PetscObject) Asub[1], "TanMat01");
-	ierr = PetscObjectSetName((PetscObject) Asub[2], "TanMat10");
-	ierr = PetscObjectSetName((PetscObject) Asub[3], "TanMat11");
-
-	
 
 	DebugVisualizeMat(Asub[0],  work_dir + "debug/TanMat00_afterBC.m");
 	DebugVisualizeMat(Asub[1],  work_dir + "debug/TanMat01_afterBC.m");
@@ -2345,6 +2019,11 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		DebugVisualizeMat(TanMat,  work_dir + "debug/TanMat_afterBC.m");
 		DebugVisualizeVec(ResVec,  work_dir + "debug/ResVec_afterBC.m");
 		// getchar();
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/TanMat.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(TanMat,viewer);
 
 		t1 = time(NULL);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
@@ -2358,43 +2037,36 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// KSPSetOperators(ksp, TanMat, TanMat);
 		KSPSetOperators(ksp, TanMat, TanMat);
 
-		KSPGetPC(ksp,&pc);
-
-  		KSPSetType(ksp,KSPPREONLY);
-
-  		PCFactorSetUseInPlace(pc,PETSC_TRUE);
-  		PCSetType(pc,PCLU);
-		
 		KSPSetFromOptions(ksp);
-		// // KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
-		// {
-		// 	IS isg[2];
-		// 	KSP *subksp;
+		// KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
+		{
+			IS isg[2];
+			KSP *subksp;
 
 			
-		// 	KSPGetPC(ksp, &pc);
+			KSPGetPC(ksp, &pc);
 			
-		// 	ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg[0]);
-		// 	ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[1]);
+			ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg[0]);
+			ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[1]);
 
 
-		// 	// PCSetType(pc,PCFIELDSPLIT);
-		// 	PCFieldSplitSetIS(pc, "0", isg[0]);
-		// 	PCFieldSplitSetIS(pc, "1", isg[1]);
+			// PCSetType(pc,PCFIELDSPLIT);
+			PCFieldSplitSetIS(pc, "0", isg[0]);
+			PCFieldSplitSetIS(pc, "1", isg[1]);
 			
-		// 	// PCFieldSplitSetType(pc, PC_COMPOSITE_SCHUR);
-		// 	// PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_FULL);
-		// 	// PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_SELF, NULL);
+			// PCFieldSplitSetType(pc, PC_COMPOSITE_SCHUR);
+			// PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_FULL);
+			// PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_SELF, NULL);
 
-		// 	// PCSetUp(pc);
+			// PCSetUp(pc);
 
-		// 	// KSPSetType(ksp, KSPGMRES);
-		// 	// KSPGMRESSetRestart(ksp, 500);
-		// 	// KSPSetTolerances(ksp, 1.e-6, PETSC_DEFAULT, PETSC_DEFAULT, 10000);
+			// KSPSetType(ksp, KSPGMRES);
+			// KSPGMRESSetRestart(ksp, 500);
+			// KSPSetTolerances(ksp, 1.e-6, PETSC_DEFAULT, PETSC_DEFAULT, 10000);
 
-		// 	// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
-		// 	// KSPSetUp(ksp);
-		// }
+			// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+			// KSPSetUp(ksp);
+		}
 
 				
 		
@@ -2443,7 +2115,10 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// PetscViewer viewer;
     	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 
-		DebugVisualizeVec(temp_solution, work_dir + "debug/temp_solution.m");
+		DebugVisualizeVec(temp_solution, work_dir + "debug/temp_solution.output");
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/temp_solution.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = VecView(temp_solution,viewer);
 
 		//ierr = VecAXPY(Y_k, 1.0, temp_solution);
 
@@ -3058,6 +2733,20 @@ void TransportOpt2D::Run(const vector<Vertex2D>& cpts, const vector<Element2D>& 
 		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 		VecAssemblyEnd(Res_nl);
 
+		// PetscViewer viewer;
+    	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+    	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/matM.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(M,viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/matK.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(K,viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/matPx.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(P[0],viewer);
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/matPy.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = MatView(P[1],viewer);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
 
 		TangentMatSetup();
