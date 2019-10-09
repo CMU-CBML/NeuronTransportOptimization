@@ -7,6 +7,39 @@ using namespace std;
 
 typedef unsigned int uint;
 
+void DebugVisualizeMat(Mat mat_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = MatView(mat_debug,viewer);
+}
+
+void DebugVisualizeVec(Vec vec_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = VecView(vec_debug,viewer);
+}
+
+void DebugVisualizeIS(IS is_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
+    ierr = PetscViewerPushFormat(viewer,format);
+    ierr = ISView(is_debug,viewer);
+}
+
 double MatrixDet(double dxdt[2][2])
 {
 	double det = dxdt[0][0] * dxdt[1][1] - dxdt[0][1] * dxdt[1][0];
@@ -24,10 +57,10 @@ double MatrixDet(double dxdt[3][3])
 void Matrix2DInverse(double dxdt[2][2], double dtdx[2][2])
 {
 	double det = MatrixDet(dxdt);
-	dtdx[0][0] = 1 / det*(dxdt[1][1]);
-	dtdx[0][1] = 1 / det*(-dxdt[0][1]);
-	dtdx[1][0] = 1 / det*(-dxdt[1][0]);
-	dtdx[1][1] = 1 / det*(dxdt[0][0]);
+	dtdx[0][0] = 1.0 / det*(dxdt[1][1]);
+	dtdx[0][1] = 1.0 / det*(-dxdt[0][1]);
+	dtdx[1][0] = 1.0 / det*(-dxdt[1][0]);
+	dtdx[1][1] = 1.0 / det*(dxdt[0][0]);
 }
 
 void Matrix3DInverse(double dxdt[3][3], double dtdx[3][3])
@@ -269,25 +302,29 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatCreate(PETSC_COMM_WORLD, &M); 
 	ierr = MatSetSizes(M, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(M, MATMPIAIJ);
-	ierr = MatMPIAIJSetPreallocation(M, 100, NULL, 100, NULL);
+	ierr = MatMPIAIJSetPreallocation(M, 64, NULL, 64, NULL);
+	ierr = MatSetOption(M,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(M); 
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &K); 
 	ierr = MatSetSizes(K, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(K, MATMPIAIJ);
-	ierr = MatMPIAIJSetPreallocation(K, 100, NULL, 100, NULL);
+	ierr = MatMPIAIJSetPreallocation(K, 64, NULL, 64, NULL);
+	ierr = MatSetOption(K,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(K); 
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[0]); 
 	ierr = MatSetSizes(P[0], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(P[0], MATMPIAIJ);
-	ierr = MatMPIAIJSetPreallocation(P[0], 100, NULL, 100, NULL);	
+	ierr = MatMPIAIJSetPreallocation(P[0], 64, NULL, 64, NULL);	
+	ierr = MatSetOption(P[0],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[0]); 
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[1]); 
 	ierr = MatSetSizes(P[1], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(P[1], MATMPIAIJ);
-	ierr = MatMPIAIJSetPreallocation(P[1], 100, NULL, 100, NULL);
+	ierr = MatMPIAIJSetPreallocation(P[1], 64, NULL, 64, NULL);
+	ierr = MatSetOption(P[1],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[1]); 
 
 	// ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
@@ -391,6 +428,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	PetscFree(vals_yk);
 	delete col_yk, vals_yk;
 	cout << "Set Y_k Done!\n";
+	DebugVisualizeVec(Y_k,"./debug/Y_k.output");
 
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Res_nl);
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &temp_solution);
@@ -714,7 +752,7 @@ void TransportOpt2D::ComputeMassMatrix(vector<double>& Nx, const double detJ, ve
 	int a, b, nen = Nx.size();
 	for (a = 0; a < nen; a++)
 		for (b = 0; b < nen; b++)
-			MassMat[a][b] = Nx[a] * Nx[b] * detJ;
+			MassMat[a][b] += Nx[a] * Nx[b] * detJ;
 }
 
 void TransportOpt2D::ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& StiffMat)
@@ -730,7 +768,7 @@ void TransportOpt2D::ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const 
 			{
 				tmp += dNdx[a][c] * dNdx[b][c] * detJ;
 			}
-			StiffMat[a][b] = tmp;
+			StiffMat[a][b] += tmp;
 		}
 	}
 }
@@ -740,7 +778,7 @@ void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, d
 	int a, b, nen = Nx.size();
 	for (a = 0; a < nen; a++)
 		for (b = 0; b < nen; b++)
-			ParMat[a][b] = Nx[a] * dNdx[b][dir] * detJ;
+			ParMat[a][b] += Nx[a] * dNdx[b][dir] * detJ;
 }
 
 void TransportOpt2D::ComputeResVector(const vector<double> val_ini[18], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ)
@@ -978,40 +1016,79 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 		
 		switch (ind_var)
 		{
+		// case 0:
+		// 	ncols_a = ncols_k;
+		// 	PetscMalloc1(ncols_a, &col);
+		// 	PetscMalloc1(ncols_a, &vals);
+		// 	for(int i = 0; i < ncols_a; i++)
+		// 	{
+		// 		vals[i] = vals_k[i];
+		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+		// 	}
+		// 	scale = alpha0;
+		// 	break;
+		// case 1:
+		// 	// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+		// 	ncols_a = ncols_k;
+		// 	PetscMalloc1(ncols_a, &col);
+		// 	PetscMalloc1(ncols_a, &vals);
+		// 	for(int i = 0; i < ncols_a; i++)
+		// 	{
+		// 		vals[i] = vals_k[i];
+		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+		// 	}
+		// 	scale = alpha1;
+		// 	break;
+		// case 2:
+		// 	// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
+		// 	ncols_a = ncols_k;
+		// 	PetscMalloc1(ncols_a, &col);
+		// 	PetscMalloc1(ncols_a, &vals);
+		// 	for(int i = 0; i < ncols_a; i++)
+		// 	{
+		// 		vals[i] = vals_k[i];
+		// 		col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+		// 	}
+		// 	scale = alpha2;
+		// 	break;
+
 		case 0:
-			ncols_a = ncols_k;
+			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
 			PetscMalloc1(ncols_a, &vals);
 			for(int i = 0; i < ncols_a; i++)
 			{
-				vals[i] = vals_k[i];
-				col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				vals[i] = vals_k[i] + alpha0 * vals_m[i] ;
+				// vals[i] =  vals_k[i];
+				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = alpha0;
+			// scale = alpha0;
 			break;
 		case 1:
 			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_k;
+			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
 			PetscMalloc1(ncols_a, &vals);
 			for(int i = 0; i < ncols_a; i++)
 			{
-				vals[i] = vals_k[i];
-				col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				vals[i] = vals_k[i] + alpha1 * vals_m[i];
+				// vals[i] = alpha1 * vals_k[i];
+				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = alpha1;
+			// scale = alpha1;
 			break;
 		case 2:
 			// MatGetRow(K,ind_point,NULL,NULL,&vals_Extract);
-			ncols_a = ncols_k;
+			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
 			PetscMalloc1(ncols_a, &vals);
 			for(int i = 0; i < ncols_a; i++)
 			{
-				vals[i] = vals_k[i];
-				col[i] = cols_k[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				vals[i] = vals_k[i] + alpha2 *vals_m[i];
+				// vals[i] = alpha2 * vals_k[i];
+				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = alpha2;
+			// scale = alpha2;
 			break;
 		case 3:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
@@ -1023,7 +1100,8 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = beta1;
+			// scale = beta1;
+			// scale = 1.0;
 			break;
 		case 4:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
@@ -1035,7 +1113,8 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = beta1;
+			// scale = beta1;
+			// scale = 1.0;
 			break;
 		case 5:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
@@ -1047,7 +1126,8 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = beta2;
+			// scale = beta2;
+			// scale = 1.0;
 			break;
 		case 6:
 			// MatGetRow(M,ind_point,NULL,NULL,&vals_Extract);
@@ -1059,14 +1139,20 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
 			}
-			scale = beta2;
+			// scale = beta2;
+			// scale = 1.0;
 			break;
 		}
 
+		// if(ind_time == 0 || ind_time == (nTstep - 1))
+		// 	scale = scale * 0.5 * dt;
+		// else
+		// 	scale = scale * dt;
+		
 		if(ind_time == 0 || ind_time == (nTstep - 1))
-			scale = scale * 0.5 * dt;
+			scale = 0.5 * dt;
 		else
-			scale = scale * dt;
+			scale = dt;
 
 		
 		for(int i = 0; i < ncols_a; i++)
@@ -1407,105 +1493,297 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 
 void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 {
-	PetscInt ind_point, ind_var, ind_time;
-    PetscInt row, start, end;  
-	PetscReal *vals_m = new PetscReal[nPoint];
-	PetscReal *vals_k = new PetscReal[nPoint];
-	PetscReal *vals_px = new PetscReal[nPoint];
-	PetscReal *vals_py = new PetscReal[nPoint];
-	PetscReal scale;
+	PetscInt row, start, end;  
 	
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
     MatSetType(A,MATMPIAIJ);
-    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+    MatMPIAIJSetPreallocation(A, nPoint * 7, NULL, nPoint * 7, NULL);
 	MatSetUp(A);
 	MatGetOwnershipRange(A,&start,&end);
 	
-	// for(row = start; row < end; row++)
-	// {
-    //     GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
-	// 	MatGetRow(M,ind_point,NULL,NULL,&vals_m);
-	// 	MatGetRow(K,ind_point,NULL,NULL,&vals_k);
-	// 	MatGetRow(P[0],ind_point,NULL,NULL,&vals_px);
-	// 	MatGetRow(P[1],ind_point,NULL,NULL,&vals_py);
-	// 	if(ind_time > 0)
-	// 	{
-	// 		switch (ind_var)
-	// 		{
-	// 		case 0:
-	// 			PetscInt *col = new PetscInt[4 * nPoint];
-	// 			PetscReal *vals = new PetscReal[4 * nPoint];
-	// 			for(int i = 0; i < nPoint; i++)
-	// 			{
-	// 				vals[i + 0 * nPoint] = -vals_m[i];
-	// 				vals[i + 1 * nPoint] = vals_m[i] * (1 + dt * par[3] + dt * par[4]);
-	// 				vals[i + 2 * nPoint] = vals_m[i] * (-dt * par[3]);
-	// 				vals[i + 3 * nPoint] = vals_m[i] * (-dt * par[4]);
-	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 3 * nPoint] = i + (ind_var + 2) * nPoint + ind_time * nPoint * state_num; 
-	// 			}
-	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
-	// 			delete col, vals;
-	// 			break;
-	// 		case 1:
-	// 			PetscInt *col = new PetscInt[5 * nPoint];
-	// 			PetscReal *vals = new PetscReal[5 * nPoint];
-	// 			for(int i = 0; i < nPoint; i++)
-	// 			{
-	// 				vals[i + 0 * nPoint] = -vals_m[i];
-	// 				vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[5]);
-	// 				vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[5]);
-	// 				vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
-	// 				vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
-	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 3 * nPoint] = i + (ind_var + 3) * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 4 * nPoint] = i + (ind_var + 4) * nPoint + ind_time * nPoint * state_num; 
-	// 			}
-	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
-	// 			delete col, vals;
-	// 			break;
-	// 		case 2:
-	// 			PetscInt *col = new PetscInt[5 * nPoint];
-	// 			PetscReal *vals = new PetscReal[5 * nPoint];
-	// 			for(int i = 0; i < nPoint; i++)
-	// 			{
-	// 				vals[i + 0 * nPoint] = -vals_m[i];
-	// 				vals[i + 1 * nPoint] = vals_m[i] * (-dt * par[6]);
-	// 				vals[i + 2 * nPoint] = vals_m[i] * (1 + dt * par[6]);
-	// 				vals[i + 3 * nPoint] = vals_px[i] * dt * par[7] * par[7];
-	// 				vals[i + 4 * nPoint] = vals_py[i] * dt * par[7] * par[7];
-	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 2 * nPoint] = i + (ind_var + 1) * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 3 * nPoint] = i + (ind_var + 5) * nPoint + ind_time * nPoint * state_num;
-	// 				col[i + 4 * nPoint] = i + (ind_var + 6) * nPoint + ind_time * nPoint * state_num; 
-	// 			}
-	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
-	// 			delete col, vals;
-	// 			break;
-	// 		default:
-	// 			PetscInt *col = new PetscInt[2 * nPoint];
-	// 			PetscReal *vals = new PetscReal[2 * nPoint];
-	// 			for(int i = 0; i < nPoint; i++)
-	// 			{
-	// 				vals[i + 0 * nPoint] = -vals_m[i];
-	// 				vals[i + 1 * nPoint] = vals_m[i] + dt * par[8] * vals_k[i];
-	// 				col[i + 0 * nPoint] = i + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
-	// 				col[i + 1 * nPoint] = i + ind_var * nPoint + ind_time * nPoint * state_num;
-	// 			}
-	// 			MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
-	// 			delete col, vals;
-	// 			break;
-	// 		}
-	// 	}
-	// }
+	for(row = start; row < end; row++)
+	{
+        PetscInt ind_point, ind_var, ind_time;
+		PetscInt ncols_m, ncols_k, ncols_px, ncols_py;
+		const PetscReal *vals_m, *vals_k, *vals_px, *vals_py;
+		const PetscInt *cols_m, *cols_k, *cols_px, *cols_py;
 
-	delete vals_m, vals_k, vals_px, vals_py;
+		PetscInt *col;
+		PetscReal *vals;
+		PetscReal scale;
+
+		// cout << "Ncols_k: " << ncols_k <<endl;
+		// for(int i =0;i<ncols_k;i++)
+		// 	cout << "Col: "<< cols_k[i] << " Value: " << vals_k[i] <<endl;
+		// cout << "Ncols_m: " << ncols_m <<endl;
+		// for(int i =0;i<ncols_m;i++)
+		// 	cout << "Col: "<< cols_m[i] << " Value: " << vals_m[i] <<endl;
+
+		// cout << "Output M_row, K_row Done!\n";
+
+		GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
+		MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+		MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
+		MatGetRow(P[0],ind_point,&ncols_px, &cols_px,&vals_px);
+		MatGetRow(P[1],ind_point,&ncols_py, &cols_py,&vals_py);
+		if(ind_time > 0)
+		{
+			switch (ind_var)
+			{
+			case 0:
+				// PetscInt *col = new PetscInt[4 * nPoint];
+				// PetscReal *vals = new PetscReal[4 * nPoint];
+				PetscMalloc1(4 * ncols_m, &col);
+				PetscMalloc1(4 * ncols_m, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[3] + dt * par[4]);
+					vals[i + 2 * ncols_m] = vals_m[i] * (-dt * par[5]);
+					vals[i + 3 * ncols_m] = vals_m[i] * (-dt * par[6]);
+					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					col[i + 3 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num; 
+				}
+				MatSetValues(A, 1, &row, ncols_m * 4, col, vals, INSERT_VALUES);
+				// PetscFree(col);
+				// PetscFree(vals);
+				break;
+			case 1:
+				PetscMalloc1(3 * ncols_m, &col);
+				PetscMalloc1(3 * ncols_m , &vals);
+				for( int i=0;i<ncols_m;i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[3]);
+					vals[i + 2 * ncols_m] = vals_m[i] * (1 + dt * par[5]);
+					col[i + 0 * ncols_m] = cols_m[i] + 1 * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, (3 * ncols_m), col, vals, INSERT_VALUES);
+				break;
+			case 2:
+				PetscMalloc1(3 * ncols_m, &col);
+				PetscMalloc1(3 * ncols_m , &vals);
+				for( int i=0;i<ncols_m;i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[4]);
+					vals[i + 2 * ncols_m] = vals_m[i] * (1 + dt * par[6]);
+					col[i + 0 * ncols_m] = cols_m[i] + 2 * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, (3 * ncols_m), col, vals, INSERT_VALUES);
+				break;
+			case 3:
+				PetscMalloc1(2 * ncols_m + ncols_px,  &col);
+				PetscMalloc1(2 * ncols_m + ncols_px, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_px; i++)
+				{
+					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 2 * ncols_m] = cols_px[i] + 1 * nPoint + ind_time * nPoint * state_num;
+				}
+
+				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_px, col, vals, INSERT_VALUES);
+				break;
+			case 4:
+				PetscMalloc1(2 * ncols_m + ncols_py, &col);
+				PetscMalloc1(2 * ncols_m + ncols_py, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for( int i=0;i<ncols_py;i++)
+				{
+					vals[i + 2 * ncols_m] = vals_py[i] * dt * par[7] * par[7];
+					col[i + 2 * ncols_m] = cols_py[i]  + 1 * nPoint + ind_time * nPoint * state_num; 
+				}
+
+				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_py, col, vals, INSERT_VALUES);
+				break;
+			case 5:
+				PetscMalloc1(2 * ncols_m + ncols_px, &col);
+				PetscMalloc1(2 * ncols_m + ncols_px, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_px; i++)
+				{
+					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 2 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_px, col, vals, INSERT_VALUES);
+				break;
+			case 6:
+				PetscMalloc1(2 * ncols_m + ncols_py, &col);
+				PetscMalloc1(2 * ncols_m+ ncols_py, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = -vals_m[i];
+					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_py; i++)
+				{
+					vals[i + 2 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 2 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, 2 * ncols_m + ncols_py, col, vals, INSERT_VALUES);
+				break;
+			// default:
+
+			// 	PetscMalloc1(2 * ncols_m, &col);
+			// 	PetscMalloc1(2 * ncols_m, &vals);
+			// 	for(int i = 0; i < ncols_m; i++)
+			// 	{
+			// 		vals[i + 0 * ncols_m] = -vals_m[i];
+			// 		vals[i + 1 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+			// 		col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + (ind_time - 1) * nPoint * state_num;
+			// 		col[i + 1 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+			// 	}
+			// 	MatSetValues(A, 1, &row, 2 * ncols_m, col, vals, INSERT_VALUES);
+				// PetscFree(col);
+				// PetscFree(vals);
+				break;
+			}
+		}
+		else
+		{
+			switch (ind_var)
+			{
+			case 0:
+				// PetscInt *col = new PetscInt[4 * nPoint];
+				// PetscReal *vals = new PetscReal[4 * nPoint];
+				PetscMalloc1(3 * ncols_m, &col);
+				PetscMalloc1(3 * ncols_m, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] * (1 + dt * par[3] + dt * par[4]);
+					vals[i + 1 * ncols_m] = vals_m[i] * (-dt * par[5]);
+					vals[i + 2 * ncols_m] = vals_m[i] * (-dt * par[6]);
+					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					col[i + 2 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num; 
+				}
+				MatSetValues(A, 1, &row, ncols_m * 3, col, vals, INSERT_VALUES);
+				// PetscFree(col);
+				// PetscFree(vals);
+				break;
+			case 1:
+				PetscMalloc1(2 * ncols_m, &col);
+				PetscMalloc1(2 * ncols_m , &vals);
+				for( int i=0;i<ncols_m;i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] * (-dt * par[3]);
+					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[5]);
+					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
+				break;
+			case 2:
+				PetscMalloc1(2 * ncols_m, &col);
+				PetscMalloc1(2 * ncols_m , &vals);
+				for( int i=0;i<ncols_m;i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] * (-dt * par[4]);
+					vals[i + 1 * ncols_m] = vals_m[i] * (1 + dt * par[6]);
+					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
+				break;
+			case 3:
+				PetscMalloc1(ncols_m + ncols_px,  &col);
+				PetscMalloc1(ncols_m + ncols_px, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_px; i++)
+				{
+					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 1 * ncols_m] = cols_px[i] + 1 * nPoint + ind_time * nPoint * state_num;
+				}
+
+				MatSetValues(A, 1, &row, ncols_m + ncols_px, col, vals, INSERT_VALUES);
+				break;
+			case 4:
+				PetscMalloc1(ncols_m + ncols_py, &col);
+				PetscMalloc1(ncols_m + ncols_py, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for( int i=0;i<ncols_py;i++)
+				{
+					vals[i + 1 * ncols_m] = vals_py[i] * dt * par[7] * par[7];
+					col[i + 1 * ncols_m] = cols_py[i]  + 1 * nPoint + ind_time * nPoint * state_num; 
+				}
+
+				MatSetValues(A, 1, &row, ncols_m + ncols_py, col, vals, INSERT_VALUES);
+				break;
+			case 5:
+				PetscMalloc1(ncols_m + ncols_px, &col);
+				PetscMalloc1(ncols_m + ncols_px, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_px; i++)
+				{
+					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 1 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, ncols_m + ncols_px, col, vals, INSERT_VALUES);
+				break;
+			case 6:
+				PetscMalloc1(ncols_m + ncols_py, &col);
+				PetscMalloc1(ncols_m+ ncols_py, &vals);
+				for(int i = 0; i < ncols_m; i++)
+				{
+					vals[i + 0 * ncols_m] = vals_m[i] + dt * par[8] * vals_k[i];
+					col[i + 0 * ncols_m] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
+				}
+				for (int i = 0; i < ncols_py; i++)
+				{
+					vals[i + 1 * ncols_m] = vals_px[i] * dt * par[7] * par[7];
+					col[i + 1 * ncols_m] = cols_px[i] + 2 * nPoint + ind_time * nPoint * state_num;
+				}
+				MatSetValues(A, 1, &row, ncols_m + ncols_py, col, vals, INSERT_VALUES);
+				break;
+
+			}
+		}
+		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
+		MatRestoreRow(P[0],ind_point,NULL,NULL,&vals_px);
+		MatRestoreRow(P[1],ind_point,NULL,NULL,&vals_py);
+	}
+	// delete col, vals;
+	// delete vals_m, vals_k, vals_px, vals_py;
 }
 
 void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
@@ -1608,10 +1886,96 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 		}
 	}
 
-	MatZeroRowsColumns(TanMat,n_bcval,bc_global_ids,1.0,0,0);
+	string fname = "./debug/bc_global_ids.txt";
+	ofstream fout;
+	fout.open(fname.c_str());
+
+	if (fout.is_open())
+	{
+		for(int i=0;i<nTstep * n_bcval;i++)
+			fout << bc_global_ids[i] << endl;
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+
+	MatZeroRowsColumns(TanMat,nTstep * n_bcval,bc_global_ids,1.0,0,0);
 	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Tangent matrix Done!\n");
 
-	VecSetValues(ResVec, n_bcval, bc_global_ids, bc_vals, INSERT_VALUES);
+	VecSetValues(ResVec, nTstep * n_bcval, bc_global_ids, bc_vals, INSERT_VALUES);
+	VecAssemblyBegin(ResVec);
+	VecAssemblyEnd(ResVec);
+	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Residual vector Done!\n");
+
+	PetscFree(bc_vals);
+	PetscFree(bc_global_ids);
+	delete bc_vals;
+	delete bc_global_ids;
+}
+
+void TransportOpt2D::ApplyBoundaryConditionBlock(const UserSetting2D *ctx)
+{
+	PetscInt *bc_global_ids;
+	PetscScalar *bc_vals;
+
+	PetscMalloc1(nTstep * n_bcval,&bc_global_ids);
+	PetscMalloc1(nTstep * n_bcval,&bc_vals);
+	int count = 0;
+	for(int j=0;j<nTstep;j++)
+	{
+		for(int i=0;i<ctx->bc_flag.size();i++)
+		{
+			if(ctx->bc_flag[i] == -1)
+			{
+				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
+				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				bc_global_ids[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[2][i]-ctx->val_bc[2][i];
+				bc_global_ids[count + 3] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
+				bc_global_ids[count + 4] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 4] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
+				count += 5;
+				continue;
+			}
+			else if(ctx->bc_flag[i] == -2)
+			{
+				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
+				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				bc_global_ids[count + 2] = i + 2 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[2][i]-ctx->val_bc[2][i];
+				bc_global_ids[count + 3] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
+				bc_global_ids[count + 4] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 4] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
+				count += 5;
+				continue;
+			}
+			else if (ctx->bc_flag[i] == -3)
+			{
+				bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
+				bc_global_ids[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
+				bc_global_ids[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
+				bc_global_ids[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
+				count += 4;
+				continue;
+			}
+		}
+	}
+
+	string fname = "./debug/bc_global_ids.txt";
+	ofstream fout;
+	fout.open(fname.c_str());
+
+	if (fout.is_open())
+	{
+		for(int i=0;i<nTstep * n_bcval;i++)
+			fout << bc_global_ids[i] << endl;
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+
+	MatZeroRowsColumns(TanMat,nTstep * n_bcval,bc_global_ids,1.0,0,0);
+	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Tangent matrix Done!\n");
+
+	VecSetValues(ResVec, nTstep * n_bcval, bc_global_ids, bc_vals, INSERT_VALUES);
 	VecAssemblyBegin(ResVec);
 	VecAssemblyEnd(ResVec);
 	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Residual vector Done!\n");
@@ -1652,70 +2016,55 @@ void TransportOpt2D::Debug()
 
 void TransportOpt2D::TangentMatSetup()
 {
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 
 	/// A11
 	FormMatrixA11(M,K,Asubmat[0]);  // need debug
 	MatAssemblyBegin(Asubmat[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[0], MAT_FINAL_ASSEMBLY);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA11.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[0],viewer);
+
+	// DebugVisualizeMat(Asubmat[0],"./debug/matA11.output");
 
 	// A12 & A21 // No problem
 	FormMatrixA12(M,K,Asubmat[1]);  // need debug
 	MatAssemblyBegin(Asubmat[1], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[1], MAT_FINAL_ASSEMBLY);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA12.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[1],viewer);
 	MatTranspose(Asubmat[1],MAT_INITIAL_MATRIX,&Asubmat[3]); //correct
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA21.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[3],viewer);
+
+	// DebugVisualizeMat(Asubmat[1],"./debug/matA12.output");
+	// DebugVisualizeMat(Asubmat[3],"./debug/matA21.output");
 
 	// A13 & A31 // No problem
-	FormMatrixA13(M,K,P,Asubmat[2]);  // need debug
-	MatAssemblyBegin(Asubmat[2], MAT_FINAL_ASSEMBLY);
-	MatAssemblyEnd(Asubmat[2], MAT_FINAL_ASSEMBLY);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA13.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[2],viewer);
-	MatTranspose(Asubmat[2],MAT_INITIAL_MATRIX,&Asubmat[6]); //correct
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA31.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[6],viewer);
+	FormMatrixA31(M,K,P,Asubmat[6]);  // need debug
+	MatAssemblyBegin(Asubmat[6], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Asubmat[6], MAT_FINAL_ASSEMBLY);
+	MatTranspose(Asubmat[6],MAT_INITIAL_MATRIX,&Asubmat[2]); //correct
+
+	// DebugVisualizeMat(Asubmat[2],"./debug/matA13.output");
+	DebugVisualizeMat(Asubmat[6],"./debug/matA31.m");
+
 
 	// A22  // No problem
 	FormMatrixA22(M,K,Asubmat[4]);  
 	MatAssemblyBegin(Asubmat[4], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[4], MAT_FINAL_ASSEMBLY);
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA22.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = MatView(Asubmat[4],viewer);
+
+	// DebugVisualizeMat(Asubmat[4],"./debug/matA22.output");
 
 	// A23 & A32 // No problem
 	FormMatrixA23(M,K,Asubmat[5]); 
 	MatAssemblyBegin(Asubmat[5], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[5], MAT_FINAL_ASSEMBLY);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA23.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[5],viewer);
 	MatTranspose(Asubmat[5],MAT_INITIAL_MATRIX,&Asubmat[7]);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA32.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[7],viewer);
+
+	// DebugVisualizeMat(Asubmat[5],"./debug/matA23.output");
+	// DebugVisualizeMat(Asubmat[7],"./debug/matA32.output");
 
 	// A33 // No problem
 	FormMatrixA33(M,K,Asubmat[8]);  // need debug
 	MatAssemblyBegin(Asubmat[8], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[8], MAT_FINAL_ASSEMBLY);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA33.output",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(Asubmat[8],viewer);
-
 	
+	// DebugVisualizeMat(Asubmat[8],"./debug/matA33.output");
 
 	MatCreateNest(PETSC_COMM_WORLD, 3, NULL, 3, NULL, Asubmat, &TanMat_tmp);
 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/TanMat_tmp.output",&viewer);
@@ -1731,7 +2080,9 @@ void TransportOpt2D::TangentMatSetup()
     // ierr = PetscViewerPushFormat(viewer,format);
     // ierr = MatView(TanMat,viewer);
 
-    PetscPrintf(PETSC_COMM_WORLD,  "finish Tangent Mat\n");
+	DebugVisualizeMat(TanMat,"./debug/TanMat_beforeBC.m");
+    
+	PetscPrintf(PETSC_COMM_WORLD,  "finish Tangent Mat\n");
 
 }
 
@@ -1740,8 +2091,14 @@ void TransportOpt2D::PCMatSetup()
 	PetscViewer viewer;
     PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 
-	for(int i =0;i<9;i++)
-		MatConvert(Asubmat[i],MATMPIAIJ, MAT_INITIAL_MATRIX, &PCsubmat[i]);
+	for (int i = 0; i < 9; i++)
+		MatConvert(Asubmat[i], MATMPIAIJ, MAT_INITIAL_MATRIX, &PCsubmat[i]);
+
+	// MatAXPY(S,-1.0,Kbb,MAT_SUBSET_NONZERO);
+
+
+
+
 
 	MatScale(PCsubmat[0], 1.0/dt);
 	MatZeroEntries(PCsubmat[1]);
@@ -1750,7 +2107,13 @@ void TransportOpt2D::PCMatSetup()
 	MatZeroEntries(PCsubmat[5]);
 	MatZeroEntries(PCsubmat[6]);
 	MatZeroEntries(PCsubmat[7]);
-	MatMatMatMult(Asubmat[2],PCsubmat[0],Asubmat[6], MAT_INITIAL_MATRIX,PETSC_DEFAULT,&PCsubmat[8]);
+
+	Mat T;
+	MatDuplicate(Asubmat[2],  MAT_COPY_VALUES, &T);
+	MatLUFactor(Asubmat[0], NULL,NULL,NULL);
+	MatMatSolve(Asubmat[0],Asubmat[6],T);
+	MatMatMult(Asubmat[2],T,MAT_INITIAL_MATRIX,1.0,&PCsubmat[8]);
+	// MatMatMatMult(Asubmat[6],PCsubmat[0],Asubmat[2], MAT_INITIAL_MATRIX,PETSC_DEFAULT,&PCsubmat[8]);
 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matA11.output",&viewer);
     // ierr = PetscViewerPushFormat(viewer,format);
     // ierr = MatView(PCsubmat[0],viewer);
@@ -1768,9 +2131,9 @@ void TransportOpt2D::PCMatSetup()
 	PetscPrintf(PETSC_COMM_WORLD,  "PC Mat Convert Done!\n");
 	
 
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/PCMat.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = MatView(PCMat,viewer);
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/PCMat.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(PCMat,viewer);
 
     PetscPrintf(PETSC_COMM_WORLD,  "finish PC Mat\n");
 }
@@ -1790,11 +2153,11 @@ void TransportOpt2D::FormResVecb1()
 	MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = A11 * (y_d-y_k) - A13 * l_k
 
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB1.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = VecView(bsub[0],viewer);
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB1.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = VecView(bsub[0],viewer);
 
 }
 void TransportOpt2D::FormResVecb2()
@@ -1812,12 +2175,13 @@ void TransportOpt2D::FormResVecb2()
 	MatMult(Asubmat[5], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[1], -1.0, vec_tmp1, vec_tmp0); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
 
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB2.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = VecView(bsub[1],viewer);
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB2.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = VecView(bsub[1],viewer);
 }
+
 void TransportOpt2D::FormResVecb3()
 {
 	Vec vec_tmp0, vec_tmp1, vec_tmp2, vec_tmp3;
@@ -1837,19 +2201,24 @@ void TransportOpt2D::FormResVecb3()
 	VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
 	VecWAXPY(bsub[2], 1.0, vec_tmp0, vec_tmp3); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
 
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB3.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = VecView(bsub[2],viewer);
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/VecB3.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = VecView(bsub[2],viewer);
 
 }
 
 void TransportOpt2D::ResidualVecSetup()
 {
     FormResVecb1();
+	DebugVisualizeVec(bsub[0], "./debug/VecB1.output");
+
 	FormResVecb2();
+	DebugVisualizeVec(bsub[1], "./debug/VecB2.output");
+
 	FormResVecb3();
+	DebugVisualizeVec(bsub[2], "./debug/VecB3.output");
 
 	PetscInt low, high, ldim, iglobal, i, k;
 	PetscReal val, *array;
@@ -1890,11 +2259,12 @@ void TransportOpt2D::ResidualVecSetup()
 	// VecCreateNest(PETSC_COMM_WORLD, 3, NULL, bsub, &ResVec);
 	// PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vec\n");
 
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/ResVec.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = VecView(ResVec,viewer);
+	DebugVisualizeVec(ResVec,"./debug/ResVec_beforeBC.output");
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/ResVec.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = VecView(ResVec,viewer);
 
     PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vector\n");
 
@@ -1915,6 +2285,25 @@ void TransportOpt2D::ApplyBoundaryCondition(const double bc_value, int pt_num, i
 	}
 	Re[pt_num][variable_num] = -bc_value;
 	Ke[pt_num][variable_num][pt_num][variable_num] = 1.0;
+}
+
+void TransportOpt2D::DebugSubMat()
+{
+	IS isg[2];
+
+	ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg[0]);
+	ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[1]);
+	Mat Asub[4];
+	MatCreateSubMatrix(TanMat, isg[0], isg[0],  MAT_INITIAL_MATRIX, &Asub[0]);
+	MatCreateSubMatrix(TanMat, isg[0], isg[1],  MAT_INITIAL_MATRIX, &Asub[1]);
+	MatCreateSubMatrix(TanMat, isg[1], isg[0],  MAT_INITIAL_MATRIX, &Asub[2]);
+	MatCreateSubMatrix(TanMat, isg[1], isg[1],  MAT_INITIAL_MATRIX, &Asub[3]);
+
+	DebugVisualizeMat(Asub[0], "./debug/TanMat00_afterBC.m");
+	DebugVisualizeMat(Asub[1], "./debug/TanMat01_afterBC.m");
+	DebugVisualizeMat(Asub[2], "./debug/TanMat10_afterBC.m");
+	DebugVisualizeMat(Asub[3], "./debug/TanMat11_afterBC.m");
+
 }
 
 void TransportOpt2D::Run(const UserSetting2D *ctx)
@@ -1939,9 +2328,9 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		MatZeroEntries(P[1]);
 		VecSet(Res_nl, 0.0);
 		
-		// VecSet(GR, 0);		
+		// VecSet(GR, 0);
 		t0 = time(NULL);
-		BuildLinearSystemProcess(ctx ->pts, ctx->val_bc, ctx -> val_ini);
+		BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 		// // VecAssemblyEnd(GR);
 		// PetscPrintf(PETSC_COMM_WORLD, "Done Vector Assembly...\n");
 		MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
@@ -1950,36 +2339,27 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 		VecAssemblyEnd(Res_nl);
 
-		// PetscViewer viewer;
-    	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-    	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matM.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(M,viewer);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matK.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(K,viewer);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPx.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(P[0],viewer);
-		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/matPy.output",&viewer);
-    	// ierr = PetscViewerPushFormat(viewer,format);
-    	// ierr = MatView(P[1],viewer);
+		DebugVisualizeMat(M, "./debug/MMat.m");
+		DebugVisualizeMat(K, "./debug/KMat.m");
+		DebugVisualizeMat(P[0], "./debug/PxMat.m");
+		DebugVisualizeMat(P[1], "./debug/PyMat.m");
+
 		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
 
-		// Debug();
-
 		TangentMatSetup();
-		PCMatSetup();
 		ResidualVecSetup();
 		ApplyBoundaryCondition(ctx);
 
-		
-	
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/TanMat.output",&viewer);
-    ierr = PetscViewerPushFormat(viewer,format);
-    ierr = MatView(TanMat,viewer);
+		DebugSubMat();
+		// DebugVisualizeMat(PCMat, "./debug/PCMat.m");
+		DebugVisualizeMat(TanMat, "./debug/TanMat_afterBC.m");
+		DebugVisualizeVec(ResVec, "./debug/ResVec_afterBC.m");
+		// getchar();
+	// PetscViewer viewer;
+    // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
+	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/TanMat.output",&viewer);
+    // ierr = PetscViewerPushFormat(viewer,format);
+    // ierr = MatView(TanMat,viewer);
 
 		t1 = time(NULL);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
@@ -1991,17 +2371,44 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		/*Petsc KSP solver setting*/
 		KSPCreate(PETSC_COMM_WORLD, &ksp);
 		// KSPSetOperators(ksp, TanMat, TanMat);
-		KSPSetOperators(ksp, TanMat, PCMat);
-		KSPSetTolerances(ksp, 1.e-6, PETSC_DEFAULT, PETSC_DEFAULT, 10000);
+		KSPSetOperators(ksp, TanMat, TanMat);
 
-		// KSPSetOperators(ksp, TanMat, TanMat);
+		KSPSetFromOptions(ksp);
+		// KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
+		{
+			IS isg[2];
+			KSP *subksp;
 
-		// KSPGetPC(ksp, &pc);
-		// PCSetType(pc,PCJACOBI);
-		// PCSetUp(pc);
+			
+			KSPGetPC(ksp, &pc);
+			
+			ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg[0]);
+			ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[1]);
+
+
+			// PCSetType(pc,PCFIELDSPLIT);
+			PCFieldSplitSetIS(pc, "0", isg[0]);
+			PCFieldSplitSetIS(pc, "1", isg[1]);
+			
+			// PCFieldSplitSetType(pc, PC_COMPOSITE_SCHUR);
+			// PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_FULL);
+			// PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_SELF, NULL);
+
+			// PCSetUp(pc);
+
+			// KSPSetType(ksp, KSPGMRES);
+			// KSPGMRESSetRestart(ksp, 500);
+			// KSPSetTolerances(ksp, 1.e-6, PETSC_DEFAULT, PETSC_DEFAULT, 10000);
+
+			// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+			// KSPSetUp(ksp);
+		}
+
 				
 		
-		KSPSetType(ksp, KSPMINRES);
+		
+
+
 
 		// KSP *subksp;
 		// PC subpc;
@@ -2009,8 +2416,8 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// KSPSetTolerances(ksp, 1.e-7, PETSC_DEFAULT, PETSC_DEFAULT, 100000);
 		// KSPSetType(ksp, KSPGMRES);
 		// KSPGMRESSetRestart(ksp, 500);
-		//KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
-		KSPSetUp(ksp);
+		// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
+		// KSPSetUp(ksp);
 		// PCBJacobiGetSubKSP(pc, &nlocal, &first, &subksp);
 		// for (int i = 0; i<nlocal; i++) {
 		// 	KSPGetPC(subksp[i], &subpc);		
@@ -2043,9 +2450,11 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 
 		// PetscViewer viewer;
     	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-		ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/temp_solution.output",&viewer);
-    	ierr = PetscViewerPushFormat(viewer,format);
-    	ierr = VecView(temp_solution,viewer);
+
+		DebugVisualizeVec(temp_solution,"./debug/temp_solution.output");
+		// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD,"./debug/temp_solution.output",&viewer);
+    	// ierr = PetscViewerPushFormat(viewer,format);
+    	// ierr = VecView(temp_solution,viewer);
 
 		//ierr = VecAXPY(Y_k, 1.0, temp_solution);
 

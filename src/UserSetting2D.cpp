@@ -147,7 +147,7 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		for (i = 0; i < pts.size(); i++)
 		{
 			double vmax = 0.0, vx = 0.0, vy =0.0;
-			vmax = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			vmax = var[1] * (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
 			vx = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
 			if (abs(pts[i].coor[0] - 0.0) < eps)
 			{

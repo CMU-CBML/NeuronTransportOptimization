@@ -73,7 +73,7 @@ private:
 	
 	// KKT system matrix and vector
 	Mat Asubmat[9];
-	Mat PCsubmat[9];
+	Mat PCsubmat[9]; // For Preconditioner
 	Vec bsub[3];
 	IS isg[3];
 
@@ -146,13 +146,15 @@ private:
 
 	void ApplyInitialCondition(const vector<double> val_ini[18]);
 	void ApplyBoundaryCondition(const UserSetting2D *ctx);
-
+	void ApplyBoundaryConditionBlock(const UserSetting2D *ctx);
 	//void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);
 	//void Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke);
 	//void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node);
 	void ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re);
 	//void TangentAssembly(vector<array<vector<array<double, 4>>, 4>>& Ke, const vector<int>& IEN, Mat& GK);
 	//void ResidualAssembly(vector<array<double,4>> &Re, const vector<int>& IEN, Vec& GR);
+
+	void DebugSubMat();
 
 	/*Postprocessing*/
 	void ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ);
