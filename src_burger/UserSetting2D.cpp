@@ -90,18 +90,23 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 	{
 		for(i = 0; i < pts.size();i++)
 		{
-			/// Concentration
-			val_ini[0][i] = 1.0;			val_ini[1][i] = 2.0;			val_ini[2][i] = 2.0;
-			/// v+
-			val_ini[3][i] = 1.0;			val_ini[4][i] = 0.0;
-			/// v-
-			val_ini[5][i] = -1.0;			val_ini[6][i] = 0.0;
-			/// f+, f-
-			val_ini[7][i] = 1.0;			val_ini[8][i] = 0.0;
-			val_ini[9][i] = 1.0;			val_ini[10][i] = 0.0;
-			/// lambda
-			for(j=0;j<7;j++)
-				val_ini[j+11][i] = 1.0;
+			if((pts[i].coor[0] >=0.0) & (pts[i].coor[0] <= 0.5))
+			{
+				val_ini[0][i] = 1.0;			val_ini[1][i] = 0.0;
+				val_ini[2][i] = 1.0;			val_ini[3][i] = 1.0;
+				val_ini[4][i] = 1.0;			val_ini[5][i] = 1.0;
+			}
+			else
+			{
+				for(j = 0;j<2;j++)
+				{
+					val_ini[j][i] = 0.0;
+				}
+				for(j = 2;j<6;j++)
+				{
+					val_ini[j][i] = 1.0;
+				}
+			}
 		}
 		TXTWriteIC(fn_in);
 	}
@@ -113,7 +118,7 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 {
 	int i, j;
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < 2; i++)
 		val_bc[i].resize(pts.size());
 	bc_flag.resize(pts.size(), 0);
 	if (ReadBC)
@@ -126,7 +131,7 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < 7; i++)
+				for (i = 0; i < 2; i++)
 				{
 					fin >> stmp >> val_bc[i][j];
 				}
@@ -146,55 +151,35 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		int count(0);
 		for (i = 0; i < pts.size(); i++)
 		{
-			double vmax = 0.0, vx = 0.0, vy =0.0;
-			vmax = var[1] * (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
-			vx = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
 			if (abs(pts[i].coor[0] - 0.0) < eps)
 			{
 				/// Concentration
-				val_bc[0][i] = 1.0;
-				val_bc[1][i] = 2.0;
-				val_bc[2][i] = 0.0;
-				/// v+
-				val_bc[3][i] = vx;
-				val_bc[4][i] = vy;
-				// val_bc[3][i] = 1.0;
-				// val_bc[4][i] = 0.0;
-				/// v-
-				//val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
-				///bc_flag
+				val_bc[0][i] = 0.0;
+				val_bc[1][i] = 0.0;
 				bc_flag[i] = -1;
 				continue;
 			}
-			else if (abs(pts[i].coor[0] - 10.0) < eps)
+			else if (abs(pts[i].coor[0] - 1.0) < eps)
 			{
 				/// Concentration
-				val_bc[0][i] = 1.0;
+				val_bc[0][i] = 0.0;
 				val_bc[1][i] = 0.0;
-				val_bc[2][i] = 2.0;
-				/// v+
-				//val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
-				/// v-
-				// val_bc[5][i] = -1.0;
-				// val_bc[6][i] = 0.0;
-				val_bc[5][i] = -vx;
-				val_bc[6][i] = vy;
 				bc_flag[i] = -2;
 				continue;
 			}
-			else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
-			{
-				/// Concentration
-				//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
-				/// v+
-				val_bc[3][i] = 0.0;
-				val_bc[4][i] = 0.0;
-				/// v-
-				val_bc[5][i] = 0.0;
-				val_bc[6][i] = 0.0;
-				bc_flag[i] = -3;
-				continue;
-			}
+			// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+			// {
+			// 	/// Concentration
+			// 	//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
+			// 	/// v+
+			// 	val_bc[3][i] = 0.0;
+			// 	val_bc[4][i] = 0.0;
+			// 	/// v-
+			// 	val_bc[5][i] = 0.0;
+			// 	val_bc[6][i] = 0.0;
+			// 	bc_flag[i] = -3;
+			// 	continue;
+			// }
 			bc_flag[i] = count;
 			count++;
 		}
@@ -226,7 +211,7 @@ void UserSetting2D::SetBoundaryMapping()
 void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 {
 	int i, j;
-	for (i = 0; i < 7; i++)
+	for (i = 0; i < 2; i++)
 		val_desire[i].resize(pts.size());
 	if (ReadDesire)
 	{
@@ -238,7 +223,7 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < 7; i++)
+				for (i = 0; i < 2; i++)
 				{
 					fin >> stmp >> val_desire[i][j];
 				}
@@ -256,12 +241,22 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 		double eps(1e-6);
 		for (i = 0; i < pts.size(); i++)
 		{
-			double vmax = 0.0;
-			vmax = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
-			val_desire[3][i] = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
-			val_desire[4][i] = 0.0;
-			val_desire[5][i] = vmax * (1.0 - (pts[i].coor[1]/0.5) * (pts[i].coor[1]/0.5));
-			val_desire[6][i] = 0.0;			
+			
+			if(pts[i].coor[0] >=0 & pts[i].coor[0] <= 0.5)
+			{
+				val_desire[0][i] = 1.0;			val_desire[1][i] = 0.0;
+			}
+			else
+			{
+				for(j = 0;j<2;j++)
+				{
+					val_ini[j][i] = 0.0;
+				}
+				for(j = 2;j<6;j++)
+				{
+					val_ini[j][i] = 1.0;
+				}
+			}
 		}
 		TXTWriteDesire(fn_in);
 	}
@@ -280,10 +275,10 @@ void UserSetting2D::TXTWriteIC(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < 18; i++)
+			for (i = 0; i < 6; i++)
 			{
 
-				if (i == 17)
+				if (i == 5)
 				{
 					fout << val_ini[i][j] << "\n";
 				}
@@ -311,7 +306,7 @@ void UserSetting2D::TXTWriteBC(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < 7; i++)
+			for (i = 0; i < 2; i++)
 			{
 				fout << val_bc[i][j] << " ";
 				// if (i == 6)
@@ -343,9 +338,9 @@ void UserSetting2D::TXTWriteDesire(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < 7; i++)
+			for (i = 0; i < 2; i++)
 			{
-				if(i!=6)
+				if(i!=1)
 					fout << val_desire[i][j] << " ";
 				else
 					fout << val_desire[i][j] << "\n";
@@ -378,38 +373,48 @@ void UserSetting2D::VTKVisualizeIC(string fn_out)
 		{
 			fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
 		}
-		fout << "\nCELL_TYPES " << mesh.size() << '\n';
+		fout << "\nCELL_TYPES " << mesh.size() << "\n";
 		for (i = 0; i<mesh.size(); i++)
 		{
 			fout << "9\n";
 		}
-		fout << "POINT_DATA " << pts.size() << "\nSCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		fout << "POINT_DATA " << pts.size() << "\n";
+		fout << "VECTORS y float\n";
 		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[0][i] << "\n";
-		fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
+			fout << val_ini[0][i] << " " << val_ini[1][i] << " " << 0 << "\n";
+		fout << "VECTORS u float\n";
 		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[1][i] << "\n";
-		fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
+			fout << val_ini[2][i] << " " << val_ini[3][i] << " " << 0 << "\n";
+		fout << "VECTORS lamda float\n";
 		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[2][i] << "\n";
-		fout << "VECTORS Vplus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[3][i] << " " << val_ini[4][i] << " " << 0 << "\n";
-		fout << "VECTORS Vminus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[5][i] << " " << val_ini[6][i] << " " << 0 << "\n";
-		fout << "VECTORS Fplus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[7][i] << " " << val_ini[8][i] << " " << 0 << "\n";
-		fout << "VECTORS Fminus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[9][i] << " " << val_ini[10][i] << " " << 0 << "\n";
-		for (j = 0; j < 7; j++)
-		{
-			fout << "SCALARS lambda" << j+1 << " float 1\nLOOKUP_TABLE default\n";
-			for (i = 0; i < pts.size(); i++)
-				fout << val_ini[j + 11][i] << "\n";
-		}
+			fout << val_ini[4][i] << " " << val_ini[5][i] << " " << 0 << "\n";
+		// fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[0][i] << "\n";
+		// fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[1][i] << "\n";
+		// fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[2][i] << "\n";
+		// fout << "VECTORS Vplus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[3][i] << " " << val_ini[4][i] << " " << 0 << "\n";
+		// fout << "VECTORS Vminus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[5][i] << " " << val_ini[6][i] << " " << 0 << "\n";
+		// fout << "VECTORS Fplus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[7][i] << " " << val_ini[8][i] << " " << 0 << "\n";
+		// fout << "VECTORS Fminus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[9][i] << " " << val_ini[10][i] << " " << 0 << "\n";
+		// for (j = 0; j < 7; j++)
+		// {
+		// 	fout << "SCALARS lambda" << j+1 << " float 1\nLOOKUP_TABLE default\n";
+		// 	for (i = 0; i < pts.size(); i++)
+		// 		fout << val_ini[j + 11][i] << "\n";
+		// }
 		
 		fout.close();
 	}
@@ -447,21 +452,21 @@ void UserSetting2D::VTKVisualizeBC(string fn_out)
 		fout << "SCALARS bc_flag float 1\nLOOKUP_TABLE default\n";
 		for (i = 0; i < pts.size(); i++)
 			fout << bc_flag[i] << "\n";
-		fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		// fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_bc[0][i] << "\n";
+		// fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_bc[1][i] << "\n";
+		// fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_bc[2][i] << "\n";
+		fout << "VECTORS y float\n";
 		for (i = 0; i < pts.size(); i++)
-			fout << val_bc[0][i] << "\n";
-		fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_bc[1][i] << "\n";
-		fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_bc[2][i] << "\n";
-		fout << "VECTORS Vplus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_bc[3][i] << " " << val_bc[4][i] << " " << 0 << "\n";
-		fout << "VECTORS Vminus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_bc[5][i] << " " << val_bc[6][i] << " " << 0 << "\n";
+			fout << val_bc[0][i] << " " << val_bc[1][i] << " " << 0 << "\n";
+		// fout << "VECTORS Vminus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_bc[5][i] << " " << val_bc[6][i] << " " << 0 << "\n";
 		fout.close();
 	}
 	else
@@ -495,21 +500,21 @@ void UserSetting2D::VTKVisualizeDesire(string fn_out)
 			fout << "9\n";
 		}
 		fout << "POINT_DATA " << pts.size() << "\n";
-		fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		// fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_desire[0][i] << "\n";
+		// fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_desire[1][i] << "\n";
+		// fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_desire[2][i] << "\n";
+		fout << "VECTORS yd float\n";
 		for (i = 0; i < pts.size(); i++)
-			fout << val_desire[0][i] << "\n";
-		fout << "SCALARS Nplus float 1\nLOOKUP_TABLE default\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_desire[1][i] << "\n";
-		fout << "SCALARS Nminus float 1\nLOOKUP_TABLE default\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_desire[2][i] << "\n";
-		fout << "VECTORS Vplus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_desire[3][i] << " " << val_desire[4][i] << " " << 0 << "\n";
-		fout << "VECTORS Vminus float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_desire[5][i] << " " << val_desire[6][i] << " " << 0 << "\n";
+			fout << val_desire[0][i] << " " << val_desire[1][i] << " " << 0 << "\n";
+		// fout << "VECTORS Vminus float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_desire[5][i] << " " << val_desire[6][i] << " " << 0 << "\n";
 		fout.close();
 	}
 	else
@@ -551,6 +556,8 @@ void UserSetting2D::ReadMesh(string fn)
 		for (int i = 0; i < npts; i++)	fin >> pts[i].label;
 		fin.close();
 		PetscPrintf(PETSC_COMM_WORLD, "Mesh Loaded!\n");
+		// PetscPrintf(PETSC_COMM_WORLD, "# of Nodes: %d \n", pts.size());
+		// PetscPrintf(PETSC_COMM_WORLD, "# of elements: %d \n", mesh.size());
 	}
 	else
 	{
@@ -592,14 +599,14 @@ void UserSetting2D::AssignProcessor(string fn)
 
 void UserSetting2D::SetVariables(string fn_par, vector<double>& var)
 {
-	var.resize(19);
+	var.resize(21);
 	string fname(fn_par), stmp;
 	stringstream ss;
 	ifstream fin;
 	fin.open(fname);
 	if (fin.is_open())
 	{
-		for (int i = 0; i < 19; i++)
+		for (int i = 0; i < 21; i++)
 		{
 			fin >> stmp >> var[i];
 		}	

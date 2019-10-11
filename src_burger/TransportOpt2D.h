@@ -39,6 +39,7 @@ private:
 	vector<int> ele_process;
 	vector<Element2D> bzmesh_process;
 
+	SNES snes;
 	KSP ksp;
 	PC pc;
 	
@@ -85,7 +86,7 @@ private:
 	Vec Res_nl;
 
 	Vec temp_solution;
-	Vec ResVec;
+	Vec X, ResVec;
 	Mat TanMat_tmp, TanMat;
 	Mat PCMat_tmp, PCMat;
 
@@ -134,7 +135,7 @@ private:
 	void FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A);
 	void FormMatrixA32(Mat M, Mat K, Mat &A);
 	void FormMatrixA33(Mat M, Mat K, Mat &A);
-	
+
 
 	void AssembleGlobalMatrix();
 	void TangentMatSetup();
@@ -147,13 +148,15 @@ private:
 
 	void ApplyInitialCondition(const vector<double> val_ini[6]);
 	void ApplyBoundaryCondition(const UserSetting2D *ctx);
-	void ApplyBoundaryConditionBlock(const UserSetting2D *ctx);
 	//void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);
 	//void Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke);
 	//void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node);
 	void ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re);
 	//void TangentAssembly(vector<array<vector<array<double, 4>>, 4>>& Ke, const vector<int>& IEN, Mat& GK);
 	//void ResidualAssembly(vector<array<double,4>> &Re, const vector<int>& IEN, Vec& GR);
+
+	PetscErrorCode FormFunction(SNES snes,Vec x,Vec f, void *ctx);
+	PetscErrorCode FormJacobian(SNES snes,Vec x,Mat jac,Mat B, void *ctx);
 
 	void DebugSubMat();
 
@@ -170,6 +173,7 @@ public:
 
 	
 	void Run(const UserSetting2D *ctx);
+	void Run_SNES(const UserSetting2D *ctx);
 	
 
 

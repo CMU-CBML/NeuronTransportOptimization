@@ -299,7 +299,11 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	/*Initialize elements assigned to this rank*/
 	AssignProcessor(ctx);
 
-	/*Initialize petsc vector, matrix*/
+	/*Initialize petsc IS, vector, matrix*/
+
+	ierr = ISCreateStride(PETSC_COMM_WORLD, state_num * nPoint *nTstep, 0, 1, &isg[0]);
+	ierr = ISCreateStride(PETSC_COMM_WORLD, ctrl_num * nPoint *nTstep, (state_num) *nPoint *nTstep, 1, &isg[1]);
+	ierr = ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[2]);
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &M); 
 	ierr = MatSetSizes(M, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
