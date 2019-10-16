@@ -61,7 +61,7 @@ void UserSetting2D::SetVariables(string fn_par)
 void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 {
 	int i, j;
-	for (i = 0; i < 6; i++)
+	for (i = 0; i < 2; i++)
 		val_ini[i].resize(pts.size());
 
 	if (ReadIC)
@@ -74,7 +74,7 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < 6; i++)
+				for (i = 0; i < 2; i++)
 				{
 					fin >> stmp >> val_ini[i][j];
 				}
@@ -90,21 +90,15 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 	{
 		for(i = 0; i < pts.size();i++)
 		{
-			if((pts[i].coor[0] >=0.0) & (pts[i].coor[0] <= 0.5))
+			if((pts[i].coor[0] > 0.0) & (pts[i].coor[0] <= 0.5))
 			{
 				val_ini[0][i] = 1.0;			val_ini[1][i] = 0.0;
-				val_ini[2][i] = 1.0;			val_ini[3][i] = 1.0;
-				val_ini[4][i] = 1.0;			val_ini[5][i] = 1.0;
 			}
 			else
 			{
 				for(j = 0;j<2;j++)
 				{
 					val_ini[j][i] = 0.0;
-				}
-				for(j = 2;j<6;j++)
-				{
-					val_ini[j][i] = 1.0;
 				}
 			}
 		}
@@ -151,6 +145,7 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		int count(0);
 		for (i = 0; i < pts.size(); i++)
 		{
+			
 			if (abs(pts[i].coor[0] - 0.0) < eps)
 			{
 				/// Concentration
@@ -165,6 +160,12 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 				val_bc[0][i] = 0.0;
 				val_bc[1][i] = 0.0;
 				bc_flag[i] = -2;
+				continue;
+			}
+			else
+			{
+				val_bc[1][i] = 0.0;
+				bc_flag[i] = -3;
 				continue;
 			}
 			// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
@@ -242,7 +243,7 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 		for (i = 0; i < pts.size(); i++)
 		{
 			
-			if(pts[i].coor[0] >=0 & pts[i].coor[0] <= 0.5)
+			if(pts[i].coor[0] > 0 & pts[i].coor[0] <= 0.5)
 			{
 				val_desire[0][i] = 1.0;			val_desire[1][i] = 0.0;
 			}
@@ -250,11 +251,7 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 			{
 				for(j = 0;j<2;j++)
 				{
-					val_ini[j][i] = 0.0;
-				}
-				for(j = 2;j<6;j++)
-				{
-					val_ini[j][i] = 1.0;
+					val_desire[j][i] = 0.0;
 				}
 			}
 		}
@@ -275,10 +272,10 @@ void UserSetting2D::TXTWriteIC(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < 6; i++)
+			for (i = 0; i < 2; i++)
 			{
 
-				if (i == 5)
+				if (i == 1)
 				{
 					fout << val_ini[i][j] << "\n";
 				}
@@ -366,7 +363,7 @@ void UserSetting2D::VTKVisualizeIC(string fn_out)
 		fout << "POINTS " << pts.size() << " float\n";
 		for (i = 0; i<pts.size(); i++)
 		{
-			fout << pts[i].coor[0] << " " << pts[i].coor[1] << " " << pts[i].coor[2] << "\n";
+			fout << std::setprecision(9) << pts[i].coor[0] << std::fixed<< " " << std::setprecision(9) << pts[i].coor[1]<< std::fixed << " " << std::setprecision(9) << pts[i].coor[2] << std::fixed<< "\n";
 		}
 		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
 		for (i = 0; i<mesh.size(); i++)
@@ -382,12 +379,12 @@ void UserSetting2D::VTKVisualizeIC(string fn_out)
 		fout << "VECTORS y float\n";
 		for (i = 0; i < pts.size(); i++)
 			fout << val_ini[0][i] << " " << val_ini[1][i] << " " << 0 << "\n";
-		fout << "VECTORS u float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[2][i] << " " << val_ini[3][i] << " " << 0 << "\n";
-		fout << "VECTORS lamda float\n";
-		for (i = 0; i < pts.size(); i++)
-			fout << val_ini[4][i] << " " << val_ini[5][i] << " " << 0 << "\n";
+		// fout << "VECTORS u float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[2][i] << " " << val_ini[3][i] << " " << 0 << "\n";
+		// fout << "VECTORS lambda float\n";
+		// for (i = 0; i < pts.size(); i++)
+		// 	fout << val_ini[4][i] << " " << val_ini[5][i] << " " << 0 << "\n";
 		// fout << "SCALARS N0 float 1\nLOOKUP_TABLE default\n";
 		// for (i = 0; i < pts.size(); i++)
 		// 	fout << val_ini[0][i] << "\n";
@@ -436,7 +433,7 @@ void UserSetting2D::VTKVisualizeBC(string fn_out)
 		fout << "POINTS " << pts.size() << " float\n";
 		for (i = 0; i<pts.size(); i++)
 		{
-			fout << pts[i].coor[0] << " " << pts[i].coor[1] << " " << pts[i].coor[2] << "\n";
+			fout << std::setprecision(9) << pts[i].coor[0] << std::fixed<< " " << std::setprecision(9) << pts[i].coor[1]<< std::fixed << " " << std::setprecision(9) << pts[i].coor[2] << std::fixed<< "\n";
 		}
 		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
 		for (i = 0; i<mesh.size(); i++)
@@ -487,7 +484,7 @@ void UserSetting2D::VTKVisualizeDesire(string fn_out)
 		fout << "POINTS " << pts.size() << " float\n";
 		for (i = 0; i<pts.size(); i++)
 		{
-			fout << pts[i].coor[0] << " " << pts[i].coor[1] << " " << pts[i].coor[2] << "\n";
+			fout << std::setprecision(9) << pts[i].coor[0] << std::fixed<< " " << std::setprecision(9) << pts[i].coor[1]<< std::fixed << " " << std::setprecision(9) << pts[i].coor[2] << std::fixed<< "\n";
 		}
 		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
 		for (i = 0; i<mesh.size(); i++)

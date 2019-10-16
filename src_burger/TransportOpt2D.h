@@ -16,6 +16,7 @@ using namespace std;
 const int degree = 3;
 const int state_num = 2;
 const int ctrl_num = 2;
+const int result_num = 6;
 const int bzpt_num = 16;
 
 
@@ -65,10 +66,13 @@ private:
 	// state variables
 	vector<double> n0, n_plus, n_minus;
 	vector<double> Vel_plus[dim], Vel_minus[dim];
+	vector<double> State[state_num];
 	// control variables
 	vector<double> f_plus[dim], f_minus[dim];
+	vector<double> Ctrl[ctrl_num];
 	// penalty variables
 	vector<double> lambda[1 * dim];
+	vector<double> Lambda[state_num];
 
 	// Unit Np * Np Matrix
 	Mat M, K, P[dim];
@@ -85,7 +89,7 @@ private:
 	Vec Y_k, U_k, L_k; // Initial value in iteration
 	Vec Res_nl;
 
-	Vec temp_solution;
+	Vec dX;
 	Vec X, ResVec;
 	Mat TanMat_tmp, TanMat;
 	Mat PCMat_tmp, PCMat;
@@ -122,8 +126,11 @@ private:
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
 	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
 	void ComputeResVector(const vector<double> val_ini[6], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ);
+
 	void MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
 	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[2], const vector<double> val_ini[6]);
+	void BuildResVectorProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[2], const vector<double> val_ini[6]);
+
 
 	void GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep);
 	void FormMatrixA11(Mat M, Mat K, Mat &A);
@@ -141,19 +148,15 @@ private:
 	void TangentMatSetup();
 	void PCMatSetup();
 
-	void FormResVecb1();
-	void FormResVecb2();
-	void FormResVecb3();
-	void ResidualVecSetup();
+	void FormResVecb1(Vec x);
+	void FormResVecb2(Vec x);
+	void FormResVecb3(Vec x);
+	void ResidualVecSetup(Vec x);
 
-	void ApplyInitialCondition(const vector<double> val_ini[6]);
 	void ApplyBoundaryCondition(const UserSetting2D *ctx);
-	//void Residual(vector<double>& Nx, vector<array<double, 3>>& dNdx, vector<array<array<double, 3>, 3>>& dN2dx2, double dudx[3][3], const double detJ, const vector<array<double, 4>> &U, vector<array<double, 4>> Re);
-	//void Tangent(vector<double> &Nx, vector<array<double, 3>>& dNdx, double dudx[3][3], const double detJ, const vector<array<double, 4>>& U, vector<array<vector<array<double, 4>>, 4>>& Ke);
-	//void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<array<double, 2>>& velocity_bc, const vector<double> velocity_node, const vector<double> pressure_node);
-	void ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re);
-	//void TangentAssembly(vector<array<vector<array<double, 4>>, 4>>& Ke, const vector<int>& IEN, Mat& GK);
-	//void ResidualAssembly(vector<array<double,4>> &Re, const vector<int>& IEN, Vec& GR);
+
+
+	void CollectAndUpdateResult(Vec dx, Vec x);
 
 	PetscErrorCode FormFunction(SNES snes,Vec x,Vec f, void *ctx);
 	PetscErrorCode FormJacobian(SNES snes,Vec x,Mat jac,Mat B, void *ctx);
@@ -161,10 +164,16 @@ private:
 	void DebugSubMat();
 
 	/*Postprocessing*/
-	void ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ);
+	void ResultCal_Bezier(double u, double v, int time, const Element2D& bzel, double pt[3], double result[result_num], double dudx[3], double& detJ);
+	void WriteVTK(const vector<array<double, 3>> pts, const vector<double> sdisp, const vector<array<int, 4>> sele, int time, int step, string fn);
+	void VisualizeVTK_PhysicalDomain(int time, int step, string fn);
 	void VisualizeVTK_ControlMesh(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int step, string fn);
-	void VisualizeVTK_PhysicalDomain(int step, string fn);
-	void WriteVTK(const vector<array<double, 3>> pts, const vector<double> sdisp, const vector<array<int, 8>> sele, int step, string fn);
+	void VisualizeVTK_ControlMesh_Burger(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int time, int step, string fn);
+
+	//void ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ);
+
+
+
 public:
 	/*Preprocessing*/
 	void InitializeProblem(const int ndof, const int n_bz, const vector<double>& Vel0, const vector<double>& Pre0, const vector<double>& var);

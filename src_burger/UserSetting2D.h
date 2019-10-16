@@ -34,7 +34,7 @@ public:
 	vector<double> var;
 	vector<Vertex2D> pts;
 	vector<Element2D> mesh;
-	vector<double> val_ini[6];
+	vector<double> val_ini[2];
 	vector<double> val_bc[2];
 	vector<double> val_desire[2];
 	vector<int> bc_flag; // global node index -> index without bc pts 

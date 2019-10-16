@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 	PetscErrorCode ierr;
 	PetscBool flg;
 
-	/// start up petsc
+	// start up petsc
 	ierr = PetscInitialize(&argc, &argv, (char *)0, help);
 	if (ierr)
 		return ierr;

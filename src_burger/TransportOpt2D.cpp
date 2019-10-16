@@ -94,9 +94,11 @@ TransportOpt2D::~TransportOpt2D()
 	VecDestroy(&Y_k);
 	VecDestroy(&U_k);
 	VecDestroy(&L_k);
+	VecDestroy(&dX);
+	VecDestroy(&X);
 	VecDestroy(&Res_nl);
 	VecDestroy(&ResVec);
-	VecDestroy(&temp_solution);
+	VecDestroy(&dX);
 	VecDestroy(bsub);
 
 	MatDestroy(&M);
@@ -264,13 +266,13 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	nPoint = ctx->pts.size();	
 
 	// constant parameters
-	alpha0 = ctx->var[9];
-	alpha1 = ctx->var[10];
-	alpha2 = ctx->var[11];
-	beta1 = ctx->var[12];
-	beta2 = ctx->var[13];
-	dt = ctx->var[14];
-	nTstep = ctx->var[15];
+	alpha0 = ctx->var[11];
+	alpha1 = ctx->var[12];
+	alpha2 = ctx->var[13];
+	beta1 = ctx->var[14];
+	beta2 = ctx->var[15];
+	dt = ctx->var[16];
+	nTstep = ctx->var[17];
 	par = ctx->var;//Dn0, v_plus, v_minus, k+, k-,k'+,k'-
 
 	// state variables
@@ -282,17 +284,53 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 		Vel_plus[i].resize(nPoint * nTstep);
 		Vel_minus[i].resize(nPoint * nTstep);
 	}
+	for(int i = 0; i < state_num; i++)
+	{
+		State[i].resize(nPoint * nTstep);
+	}
+	for (int j = 0; j < nTstep; j++)
+	{
+		for (int i = 0; i < ctx->bc_flag.size(); i++)
+		{
+
+			if (ctx->bc_flag[i] == -1)
+			{
+				State[0][i+j*nPoint] = ctx->val_bc[0][i];
+				State[1][i+j*nPoint] = ctx->val_bc[1][i];
+				continue;
+			}
+			else if (ctx->bc_flag[i] == -2)
+			{
+				State[0][i+j*nPoint] = ctx->val_bc[0][i];
+				State[1][i+j*nPoint] = ctx->val_bc[1][i];
+				continue;
+			}
+			else if (ctx->bc_flag[i] == -3)
+			{
+				State[1][i+j*nPoint] = ctx->val_bc[1][i];
+				continue;
+			}
+		}
+	}
+
 	// control variables
 	for(int i = 0; i < dim; i++)
 	{
 		f_plus[i].resize(nPoint * nTstep);
 		f_minus[i].resize(nPoint * nTstep);
 	}
+	for(int i = 0; i < ctrl_num; i++)
+	{
+		Ctrl[i].resize(nPoint * nTstep);
+	}
 
 	// penalty variables
 	for(int i = 0; i < state_num; i++)
 		lambda[i].resize(nPoint * nTstep);
-
+	for(int i = 0; i < state_num; i++)
+	{
+		Lambda[i].resize(nPoint * nTstep);
+	}
 	cout << "nPoint: "<< nPoint << endl;
 	cout << "nTstep: "<< nTstep << endl;
 
@@ -305,12 +343,17 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = ISCreateStride(PETSC_COMM_WORLD, ctrl_num * nPoint *nTstep, (state_num) *nPoint *nTstep, 1, &isg[1]);
 	ierr = ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[2]);
 
+	DebugVisualizeIS(isg[0], work_dir + "debug/isg0.m");
+	DebugVisualizeIS(isg[1], work_dir + "debug/isg1.m");
+	DebugVisualizeIS(isg[2], work_dir + "debug/isg2.m");
+
 	ierr = MatCreate(PETSC_COMM_WORLD, &M); 
 	ierr = MatSetSizes(M, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
 	ierr = MatSetType(M, MATMPIAIJ);
 	ierr = MatMPIAIJSetPreallocation(M, 64, NULL, 64, NULL);
 	ierr = MatSetOption(M,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(M); 
+	ierr = PetscObjectSetName((PetscObject) M, "M");
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &K); 
 	ierr = MatSetSizes(K, PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
@@ -318,6 +361,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(K, 64, NULL, 64, NULL);
 	ierr = MatSetOption(K,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(K); 
+	ierr = PetscObjectSetName((PetscObject) K, "K"); 
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[0]); 
 	ierr = MatSetSizes(P[0], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
@@ -325,6 +369,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(P[0], 64, NULL, 64, NULL);	
 	ierr = MatSetOption(P[0],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[0]); 
+	ierr = PetscObjectSetName((PetscObject) P[0], "Px");
 
 	ierr = MatCreate(PETSC_COMM_WORLD, &P[1]); 
 	ierr = MatSetSizes(P[1], PETSC_DECIDE, PETSC_DECIDE, nPoint, nPoint);
@@ -332,6 +377,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = MatMPIAIJSetPreallocation(P[1], 64, NULL, 64, NULL);
 	ierr = MatSetOption(P[1],MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	ierr = MatSetUp(P[1]); 
+	ierr = PetscObjectSetName((PetscObject) P[1], "Py");
 
 	// ierr = MatSetOption(GK, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE);
 	// ierr = MatSetUp(GK); 
@@ -348,10 +394,12 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = VecSet(U_k, 1.0);
 	ierr = VecSet(L_k, 1.0);
 	ierr = VecSet(Y_d, 0.0);
+	ierr = VecSet(X, 0.0);
 
 	PetscInt *col_yk, *col_yd;
 	PetscReal *vals_yk, *vals_yd;
 
+	// * Setup Desire State Vec
 	PetscMalloc1(nPoint * 2 * nTstep, &col_yd);
 	PetscMalloc1(nPoint * 2 * nTstep, &vals_yd);
 
@@ -372,11 +420,15 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	VecAssemblyBegin(Y_d);
 	VecAssemblyEnd(Y_d);
 
+	DebugVisualizeVec(Y_d, work_dir + "debug/Y_d.m");
+
 	PetscFree(col_yd);
 	PetscFree(vals_yd);
 	delete col_yd, vals_yd;
 
 	cout << "Set Y_d Done!\n";
+
+	// * Setup Initial State Vec with BC
 	count = 0;
 	for(int i =0; i<ctx->bc_flag.size();i++)
 	{
@@ -384,6 +436,8 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			count += 2;
 		else if(ctx->bc_flag[i] == -2)
 			count += 2;
+		else if(ctx->bc_flag[i] == -3)
+			count += 1;
 	}
 	n_bcval = count;
 
@@ -407,6 +461,12 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 				col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
 				col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
 				count += 2;
+				continue;
+			}
+			else if(ctx->bc_flag[i] == -2)
+			{
+				col_yk[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[1][i];
+				count += 1;
 				continue;
 			}
 			// else if (ctx->bc_flag[i] == -3)
@@ -434,7 +494,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	DebugVisualizeVec(Y_k, work_dir + "debug/Y_k.m");
 
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * state_num * nTstep, &Res_nl);
-	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &temp_solution);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &dX);
 	ierr = VecSet(Res_nl, 0.0);
 
 	ierr = VecCreate(PETSC_COMM_WORLD, &ResVec);
@@ -784,7 +844,7 @@ void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, d
 			ParMat[a][b] += Nx[a] * dNdx[b][dir] * detJ;
 }
 
-void TransportOpt2D::ComputeResVector(const vector<double> val_ini[18], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ)
+void TransportOpt2D::ComputeResVector(const vector<double> val_ini[6], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ)
 {
 	int a, b, nen = IEN.size();
 	PetscInt *rows;
@@ -810,16 +870,23 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[18], vector<d
 	{
 		for (int i = 0; i < nen; i++)
 		{
-			if (j == 0)
+			if (j != 0)
 			{
 				int A = IEN[i] + (j - 1) * nPoint;
-				n0_node[i] = n0[A];
-				nplus_node[i] = n_plus[A];
-				// nminus_node[i] = n_minus[A];
-				// vplus_node[0][i] = Vel_plus[0][A];
-				// vplus_node[1][i] = Vel_plus[1][A];
-				// vminus_node[0][i] = Vel_minus[0][A];
-				// vminus_node[1][i] = Vel_minus[1][A];
+				// n0_node[i] = n0[A];
+				// nplus_node[i] = n_plus[A];
+				// // nminus_node[i] = n_minus[A];
+				// // vplus_node[0][i] = Vel_plus[0][A];
+				// // vplus_node[1][i] = Vel_plus[1][A];
+				// // vminus_node[0][i] = Vel_minus[0][A];
+				// // vminus_node[1][i] = Vel_minus[1][A];
+				n0_node[i] = State[0][A];
+				nplus_node[i] = State[1][A];
+				// nminus_node[i] = State[2][A];
+				// vplus_node[0][i] = State[3][A];
+				// vplus_node[1][i] = State[4][A];
+				// vminus_node[0][i] = State[5][A];
+				// vminus_node[1][i] = State[6][A];
 			}
 			else
 			{
@@ -916,11 +983,6 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		vector<array<array<double, 2>, 2>> dN2dx2;
 		vector<vector<double>> Mtmp, Ktmp, Pxtmp, Pytmp;
 
-		// vector<array<double, 4>> Re;
-		// vector<array<vector<array<double, 4>>, 4>> Ke;
-	
-		// vector<array<double, 4>> v_node;	
-
 		vector<double> n0_node, nplus_node, nminus_node;
 		vector<double> vplus_node[dim], vminus_node[dim];
 		vector<double> fplus_node[dim], fminus_node[dim];
@@ -931,16 +993,16 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		dNdx.clear(); dNdx.resize(nen, { 0 });
 		dN2dx2.clear(); dN2dx2.resize(nen, { {0} });
 
-		n0_node.clear(); n0_node.resize(nen, 0);
-		nplus_node.clear(); nplus_node.resize(nen, 0);
-		nminus_node.clear(); nminus_node.resize(nen, 0);
-		for(int i=0;i<dim;i++)
-		{
-			vplus_node[i].clear(); vplus_node[i].resize(nen, 0);
-			vminus_node[i].clear(); vminus_node[i].resize(nen, 0);
-			fplus_node[i].clear(); fplus_node[i].resize(nen, 0);
-			fminus_node[i].clear(); fminus_node[i].resize(nen, 0);
-		}
+		// n0_node.clear(); n0_node.resize(nen, 0);
+		// nplus_node.clear(); nplus_node.resize(nen, 0);
+		// nminus_node.clear(); nminus_node.resize(nen, 0);
+		// for(int i=0;i<dim;i++)
+		// {
+		// 	vplus_node[i].clear(); vplus_node[i].resize(nen, 0);
+		// 	vminus_node[i].clear(); vminus_node[i].resize(nen, 0);
+		// 	fplus_node[i].clear(); fplus_node[i].resize(nen, 0);
+		// 	fminus_node[i].clear(); fminus_node[i].resize(nen, 0);
+		// }
 		
 		Mtmp.clear(); Mtmp.resize(nen);
 		Ktmp.clear(); Ktmp.resize(nen);
@@ -963,7 +1025,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 					ComputeStiffMatrix(dNdx, detJ, Ktmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
-					ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
+					// ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
 			}
 		}
 		//Start element matrix assembly
@@ -979,6 +1041,39 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
+	// VecAssemblyBegin(Res_nl);
+}
+
+void TransportOpt2D::BuildResVectorProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[2], const vector<double> val_ini[6])
+{
+	//Build linear system in each process
+	int e;
+	PetscPrintf(PETSC_COMM_WORLD, "Computing Residual Vector.\n");
+	cout << "Process:" << comRank << " out of " << nProcess << " Start Loop for "<< bzmesh_process.size() <<" elements.\n";
+	for (e=0;e<bzmesh_process.size();e++){
+		int nen, A;
+	
+		double dudx[dim][dim];
+		double detJ;
+		vector<double> Nx;
+		vector<array<double, 2>> dNdx;
+		vector<array<array<double, 2>, 2>> dN2dx2;
+		
+		Nx.clear(); Nx.resize(nen, 0);
+		dNdx.clear(); dNdx.resize(nen, { 0 });
+		dN2dx2.clear(); dN2dx2.resize(nen, { {0} });
+
+		nen = bzmesh_process[e].IEN.size();
+		
+		for (int i = 0; i < Gpt.size(); i++){
+			for (int j = 0; j < Gpt.size(); j++){
+					BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
+					detJ = wght[i] * wght[j] * detJ;
+					ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
+			}
+		}
+	}
+	cout << "Process " << comRank << " :complete compute residual vector!\n";
 	VecAssemblyBegin(Res_nl);
 }
 
@@ -993,6 +1088,8 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
 	MatGetOwnershipRange(A,&start,&end);
+	PetscObjectSetName((PetscObject) A, "Asub11");
+
 	
 	for(row = start; row < end; row++)
 	{
@@ -1089,6 +1186,7 @@ void TransportOpt2D::FormMatrixA12(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub12");
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
@@ -1102,6 +1200,7 @@ void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint * 7, NULL, nPoint * 7, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub13");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1272,6 +1371,7 @@ void TransportOpt2D::FormMatrixA21(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 0, NULL, 0, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub21");
 	MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
@@ -1285,6 +1385,7 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub22");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1352,6 +1453,7 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub23");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1397,7 +1499,9 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint * 2, NULL, nPoint * 2, NULL);
+	// MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub31");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1411,12 +1515,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		PetscReal *vals;
 		PetscReal scale;
 
-		// cout << "Ncols_k: " << ncols_k <<endl;
-		// for(int i =0;i<ncols_k;i++)
-		// 	cout << "Col: "<< cols_k[i] << " Value: " << vals_k[i] <<endl;
-		// cout << "Ncols_m: " << ncols_m <<endl;
-		// for(int i =0;i<ncols_m;i++)
-		// 	cout << "Col: "<< cols_m[i] << " Value: " << vals_m[i] <<endl;
+
 
 		// cout << "Output M_row, K_row Done!\n";
 
@@ -1425,6 +1524,15 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
 		MatGetRow(P[0],ind_point,&ncols_px, &cols_px,&vals_px);
 		MatGetRow(P[1],ind_point,&ncols_py, &cols_py,&vals_py);
+
+		// cout << "Ncols_k: " << ncols_k <<endl;
+		// for(int i =0;i<ncols_k;i++)
+		// 	cout << "Col: "<< cols_k[i] << " Value: " << vals_k[i] <<endl;
+		// cout << "Ncols_m: " << ncols_m <<endl;
+		// for(int i =0;i<ncols_m;i++)
+		// 	cout << "Col: "<< cols_m[i] << " Value: " << vals_m[i] <<endl;
+
+		// cout << "ind_time: " << ind_time << " ind_point: " << ind_point<< " ind_var: " << ind_var <<"\n";
 		if(ind_time > 0)
 		{
 			switch (ind_var)
@@ -1453,7 +1561,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 					vals[i + 0 * ncols_m] = -vals_m[i];
 					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
 					col[i + 0 * ncols_m] = cols_m[i] + 1 * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 2 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
 				}
 				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
 				break;
@@ -1512,6 +1620,7 @@ void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub32");
 	MatGetOwnershipRange(A,&start,&end);
 	
 	for(row = start; row < end; row++)
@@ -1540,6 +1649,7 @@ void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
     MatSetType(A,MATMPIAIJ);
     MatMPIAIJSetPreallocation(A, 1, NULL, 0, NULL);
 	MatSetUp(A);
+	PetscObjectSetName((PetscObject) A, "Asub33");
 
 	//explicitly set diagonal to be zero
 	PetscInt row, start, end;  
@@ -1557,8 +1667,8 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 	PetscInt *bc_global_ids;
 	PetscScalar *bc_vals;
 
-	PetscMalloc1(nTstep * n_bcval,&bc_global_ids);
-	PetscMalloc1(nTstep * n_bcval,&bc_vals);
+	PetscMalloc1(nTstep * n_bcval * 2,&bc_global_ids);
+	PetscMalloc1(nTstep * n_bcval * 2,&bc_vals);
 	int count = 0;
 	for(int j=0;j<nTstep;j++)
 	{
@@ -1576,6 +1686,48 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
 				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
 				count += 2;
+				continue;
+			}
+			else if (ctx->bc_flag[i] == -3)
+			{
+				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				count += 1;
+				continue;
+			}
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
+			// 	bc_global_ids[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
+			// 	bc_global_ids[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
+			// 	bc_global_ids[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
+			// 	count += 4;
+			// 	continue;
+			// }
+		}
+	}
+
+	for(int j=0;j<nTstep;j++)
+	{
+		for(int i=0;i<ctx->bc_flag.size();i++)
+		{
+			if(ctx->bc_flag[i] == -1)
+			{
+				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
+				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				count += 2;
+				continue;
+			}
+			else if(ctx->bc_flag[i] == -2)
+			{
+				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				bc_vals[count + 0] = ctx->val_bc[0][i]-ctx->val_bc[0][i];
+				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				bc_vals[count + 1] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				count += 2;
+				continue;
+			}
+			else if (ctx->bc_flag[i] == -3)
+			{
+				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				bc_vals[count + 0] = ctx->val_bc[1][i]-ctx->val_bc[1][i];
+				count += 1;
 				continue;
 			}
 			// else if (ctx->bc_flag[i] == -3)
@@ -1604,10 +1756,10 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 		cout << "Cannot open " << fname << "!\n";
 	}
 
-	MatZeroRowsColumns(TanMat,nTstep * n_bcval,bc_global_ids,1.0,0,0);
+	MatZeroRowsColumns(TanMat,nTstep * n_bcval * 2,bc_global_ids,1.0,0,0);
 	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Tangent matrix Done!\n");
 
-	VecSetValues(ResVec, nTstep * n_bcval, bc_global_ids, bc_vals, INSERT_VALUES);
+	VecSetValues(ResVec, nTstep * n_bcval * 2, bc_global_ids, bc_vals, INSERT_VALUES);
 	VecAssemblyBegin(ResVec);
 	VecAssemblyEnd(ResVec);
 	PetscPrintf(PETSC_COMM_WORLD, "Apply BC in Residual vector Done!\n");
@@ -1616,18 +1768,6 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx)
 	PetscFree(bc_global_ids);
 	delete bc_vals;
 	delete bc_global_ids;
-}
-
-void TransportOpt2D::ApplyInitialCondition(const vector<double> val_ini[18])
-{
-	
-}
-
-void TransportOpt2D::Debug()
-{
-	cout << "Debug output Done!" <<endl;
-
-	getchar();
 }
 
 void TransportOpt2D::TangentMatSetup()
@@ -1658,7 +1798,6 @@ void TransportOpt2D::TangentMatSetup()
 	// DebugVisualizeMat(Asubmat[2], work_dir + "debug/matA13.m");
 	// DebugVisualizeMat(Asubmat[6], work_dir + "debug/matA31.m");
 
-
 	// A22  // No problem
 	FormMatrixA22(M,K,Asubmat[4]);  
 	MatAssemblyBegin(Asubmat[4], MAT_FINAL_ASSEMBLY);
@@ -1679,6 +1818,7 @@ void TransportOpt2D::TangentMatSetup()
 	FormMatrixA33(M,K,Asubmat[8]);  // need debug
 	MatAssemblyBegin(Asubmat[8], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[8], MAT_FINAL_ASSEMBLY);
+
 	
 	// DebugVisualizeMat(Asubmat[8], work_dir + "debug/matA33.m");
 
@@ -1690,13 +1830,14 @@ void TransportOpt2D::TangentMatSetup()
 	PetscPrintf(PETSC_COMM_WORLD,  "Tangent Mat Convert Done!\n");
 	
 	MatConvert(TanMat_tmp, MATMPIAIJ, MAT_INITIAL_MATRIX,&TanMat);
+	PetscObjectSetName((PetscObject) TanMat, "TanMat");
 	// MatSetUp(TanMat);
 
 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/TanMat.m",&viewer);
     // ierr = PetscViewerPushFormat(viewer,format);
     // ierr = MatView(TanMat,viewer);
 
-	DebugVisualizeMat(TanMat, work_dir + "debug/TanMat_beforeBC.m");
+	// DebugVisualizeMat(TanMat, work_dir + "debug/TanMat_beforeBC.m");
     
 	PetscPrintf(PETSC_COMM_WORLD,  "finish Tangent Mat\n");
 
@@ -1749,54 +1890,78 @@ void TransportOpt2D::PCMatSetup()
     PetscPrintf(PETSC_COMM_WORLD,  "finish PC Mat\n");
 }
 
-void TransportOpt2D::FormResVecb1()
+void TransportOpt2D::FormResVecb1(Vec x)
 {
+	Vec y_k, l_k, u_k;
 	Vec vec_tmp0, vec_tmp1, vec_tmp2;
+
+	VecGetSubVector(x, isg[0], &y_k);
+	VecGetSubVector(x, isg[1], &u_k);
+	VecGetSubVector(x, isg[2], &l_k);
+
 	VecDuplicate(Y_d, &bsub[0]);
 	VecDuplicate(Y_d, &vec_tmp0);
 	VecDuplicate(Y_d, &vec_tmp1);
 	VecDuplicate(Y_d, &vec_tmp2);
-	// VecCreateMPI();
 
-	VecWAXPY(vec_tmp0, -1.0, Y_k, Y_d); //-(y_k - y_d)
+	VecWAXPY(vec_tmp0, -1.0, y_k, Y_d);		 //-(y_k - y_d)
 	MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = -A11 * (y_k-y_d)
 
-	MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	MatMult(Asubmat[2], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A11 * (y_k-y_d) - A13 * l_k
+
+	// VecWAXPY(vec_tmp0, -1.0, Y_k, Y_d); //-(y_k - y_d)
+	// MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = -A11 * (y_k-y_d)
+
+	// MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	// VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A11 * (y_k-y_d) - A13 * l_k
 	PetscObjectSetName((PetscObject) bsub[0], "bsub1");
 
 }
-void TransportOpt2D::FormResVecb2()
+
+void TransportOpt2D::FormResVecb2(Vec x)
 {
+	Vec y_k, l_k, u_k;
 	Vec vec_tmp0, vec_tmp1, vec_tmp2;
 
-	VecDuplicate(U_k, &bsub[1]);
-	VecDuplicate(U_k, &vec_tmp0);
-	VecDuplicate(U_k, &vec_tmp1);
-	VecDuplicate(U_k, &vec_tmp2);
+	VecGetSubVector(x, isg[0], &y_k);
+	VecGetSubVector(x, isg[1], &u_k);
+	VecGetSubVector(x, isg[2], &l_k);
 
-	MatMult(Asubmat[4], U_k, vec_tmp1); //A22 * u_k
+	VecDuplicate(u_k, &bsub[1]);
+	VecDuplicate(u_k, &vec_tmp0);
+	VecDuplicate(u_k, &vec_tmp1);
+	VecDuplicate(u_k, &vec_tmp2);
+
+	MatMult(Asubmat[4], u_k, vec_tmp1); //A22 * u_k
 	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A22 * u_k
 
-	MatMult(Asubmat[5], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	MatMult(Asubmat[5], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	VecWAXPY(bsub[1], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
 	PetscObjectSetName((PetscObject) bsub[1], "bsub2");
 
 }
 
-void TransportOpt2D::FormResVecb3()
+void TransportOpt2D::FormResVecb3(Vec x)
 {
+	
+	Vec y_k, l_k, u_k;
 	Vec vec_tmp0, vec_tmp1, vec_tmp2, vec_tmp3;
-	VecDuplicate(L_k, &vec_tmp0);
-	VecDuplicate(L_k, &vec_tmp1);
-	VecDuplicate(L_k, &vec_tmp2);
-	VecDuplicate(L_k, &vec_tmp3);
-	VecDuplicate(L_k, &bsub[2]);
 
-	MatMult(Asubmat[6], Y_k, vec_tmp1); //A31 * y_k
+	VecGetSubVector(x, isg[0], &y_k);
+	VecGetSubVector(x, isg[1], &u_k);
+	VecGetSubVector(x, isg[2], &l_k);
+
+	VecDuplicate(l_k, &vec_tmp0);
+	VecDuplicate(l_k, &vec_tmp1);
+	VecDuplicate(l_k, &vec_tmp2);
+	VecDuplicate(l_k, &vec_tmp3);
+	VecDuplicate(l_k, &bsub[2]);
+
+	MatMult(Asubmat[6], y_k, vec_tmp1); //A31 * y_k
 	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A31 * y_k
 
-	MatMult(Asubmat[7], U_k, vec_tmp2); //A32 * u_k
+	MatMult(Asubmat[7], u_k, vec_tmp2); //A32 * u_k
 	VecScale(vec_tmp2, -1.0); // vec_tmp2 = -A32 * u_k
 
 	VecCopy(Res_nl, vec_tmp3);
@@ -1806,16 +1971,16 @@ void TransportOpt2D::FormResVecb3()
 
 }
 
-void TransportOpt2D::ResidualVecSetup()
+void TransportOpt2D::ResidualVecSetup(Vec x)
 {
-    FormResVecb1();
-	DebugVisualizeVec(bsub[0],  work_dir + "debug/VecB1.m");
+    FormResVecb1(x);
+	// DebugVisualizeVec(bsub[0],  work_dir + "debug/VecB1.m");
 
-	FormResVecb2();
-	DebugVisualizeVec(bsub[1],  work_dir + "debug/VecB2.m");
+	FormResVecb2(x);
+	// DebugVisualizeVec(bsub[1],  work_dir + "debug/VecB2.m");
 
-	FormResVecb3();
-	DebugVisualizeVec(bsub[2],  work_dir + "debug/VecB3.m");
+	FormResVecb3(x);
+	// DebugVisualizeVec(bsub[2],  work_dir + "debug/VecB3.m");
 
 	PetscInt low, high, ldim, iglobal, i, k;
 	PetscReal val, *array;
@@ -1849,6 +2014,8 @@ void TransportOpt2D::ResidualVecSetup()
 	VecAssemblyBegin(ResVec);
 	VecAssemblyEnd(ResVec);
 
+	PetscObjectSetName((PetscObject) ResVec, "ResVec");
+
 	// VecCreate(PETSC_COMM_WORLD, &ResVec);
 	// VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
 	// VecSetFromOptions(ResVec);
@@ -1856,7 +2023,7 @@ void TransportOpt2D::ResidualVecSetup()
 	// VecCreateNest(PETSC_COMM_WORLD, 3, NULL, bsub, &ResVec);
 	// PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vec\n");
 
-	DebugVisualizeVec(ResVec, work_dir + "debug/ResVec_beforeBC.m");
+	// DebugVisualizeVec(ResVec, work_dir + "debug/ResVec_beforeBC.m");
 	// PetscViewer viewer;
     // PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/ResVec.m",&viewer);
@@ -1865,23 +2032,6 @@ void TransportOpt2D::ResidualVecSetup()
 
     PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vector\n");
 
-}
-
-void TransportOpt2D::ApplyBoundaryCondition(const double bc_value, int pt_num, int variable_num, vector<array<vector<array<double, 4>>, 4>>& Ke, vector<array<double, 4>> &Re)
-{
-	int j, k;
-	for (j = 0; j < Re.size(); j++)	{
-		for (k = 0; k < 4; k++)		{
-			Re[j][k] += bc_value*Ke[j][k][pt_num][variable_num];
-		}
-	}
-	for (j = 0; j < Re.size(); j++)	{
-		for (k = 0; k < 4; k++)		{
-			Ke[pt_num][variable_num][j][k] = 0.0;		Ke[j][k][pt_num][variable_num] = 0.0;
-		}
-	}
-	Re[pt_num][variable_num] = -bc_value;
-	Ke[pt_num][variable_num][pt_num][variable_num] = 1.0;
 }
 
 void TransportOpt2D::DebugSubMat()
@@ -1895,6 +2045,11 @@ void TransportOpt2D::DebugSubMat()
 	MatCreateSubMatrix(TanMat, isg[0], isg[1],  MAT_INITIAL_MATRIX, &Asub[1]);
 	MatCreateSubMatrix(TanMat, isg[1], isg[0],  MAT_INITIAL_MATRIX, &Asub[2]);
 	MatCreateSubMatrix(TanMat, isg[1], isg[1],  MAT_INITIAL_MATRIX, &Asub[3]);
+
+	ierr = PetscObjectSetName((PetscObject) Asub[0], "TanMat00");
+	ierr = PetscObjectSetName((PetscObject) Asub[1], "TanMat01");
+	ierr = PetscObjectSetName((PetscObject) Asub[2], "TanMat10");
+	ierr = PetscObjectSetName((PetscObject) Asub[3], "TanMat11");
 
 	DebugVisualizeMat(Asub[0],  work_dir + "debug/TanMat00_afterBC.m");
 	DebugVisualizeMat(Asub[1],  work_dir + "debug/TanMat01_afterBC.m");
@@ -2009,7 +2164,7 @@ void TransportOpt2D::DebugSubMat()
 
 // 	/*Solving the equation*/
 
-// 	KSPSolve(ksp, ResVec, temp_solution);
+// 	KSPSolve(ksp, ResVec, dX);
 
 // 	KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
 // 	PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
@@ -2025,21 +2180,21 @@ void TransportOpt2D::DebugSubMat()
 // 	// PetscViewer viewer;
 // 	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 
-// 	DebugVisualizeVec(temp_solution, work_dir + "debug/temp_solution.m");
-// 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/temp_solution.m",&viewer);
+// 	DebugVisualizeVec(dX, work_dir + "debug/dX.m");
+// 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/dX.m",&viewer);
 // 	// ierr = PetscViewerPushFormat(viewer,format);
-// 	// ierr = VecView(temp_solution,viewer);
+// 	// ierr = VecView(dX,viewer);
 
-// 	//ierr = VecAXPY(Y_k, 1.0, temp_solution);
+// 	//ierr = VecAXPY(Y_k, 1.0, dX);
 
 // 	/*Collect the solution from all processors*/
-// 	// Vec temp_solution_seq;
+// 	// Vec dX_seq;
 // 	// VecScatter scatter_ctx;
 // 	// PetscReal    *_a;
-// 	// VecScatterCreateToAll(temp_solution, &scatter_ctx, &temp_solution_seq);
-// 	// VecScatterBegin(scatter_ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-// 	// VecScatterEnd(scatter_ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-// 	// VecGetArray(temp_solution_seq, &_a);
+// 	// VecScatterCreateToAll(dX, &scatter_ctx, &dX_seq);
+// 	// VecScatterBegin(scatter_ctx, dX, dX_seq, INSERT_VALUES, SCATTER_FORWARD);
+// 	// VecScatterEnd(scatter_ctx, dX, dX_seq, INSERT_VALUES, SCATTER_FORWARD);
+// 	// VecGetArray(dX_seq, &_a);
 // 	// MPI_Barrier(comm);
 
 // 	// for (uint i = 0; i < cpts.size(); i++){
@@ -2048,9 +2203,9 @@ void TransportOpt2D::DebugSubMat()
 // 	// 	V_delta[3 * i + 2] = PetscRealPart(_a[4 * i + 2]);
 // 	// 	P_delta[i] = PetscRealPart(_a[4 * i + 3]);
 // 	// }
-// 	// VecRestoreArray(temp_solution_seq, &_a);
+// 	// VecRestoreArray(dX_seq, &_a);
 // 	// VecScatterDestroy(&ctx);
-// 	// VecDestroy(&temp_solution_seq);
+// 	// VecDestroy(&dX_seq);
 
 // 	// for (uint i = 0; i < cpts.size(); i++){
 // 	// 	Vel[3 * i] += V_delta[3 * i];
@@ -2072,7 +2227,7 @@ void TransportOpt2D::DebugSubMat()
 void TransportOpt2D::Run(const UserSetting2D *ctx)
 {
 	
-	int n_iterator(3);
+	int n_iterator(30);
 	int l(0);
 	time_t t0, t1;	
 	vector<double> Y_delta(state_num * nPoint * nTstep);
@@ -2093,34 +2248,37 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		MatZeroEntries(K);
 		MatZeroEntries(P[0]);
 		MatZeroEntries(P[1]);
-		VecSet(Res_nl, 0.0);
+		
 		
 		// VecSet(GR, 0);
 		t0 = time(NULL);
 		BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
+		
 		// // VecAssemblyEnd(GR);
 		// PetscPrintf(PETSC_COMM_WORLD, "Done Vector Assembly...\n");
 		MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
 		MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
 		MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
 		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
+
+		VecSet(Res_nl, 0.0);
+		BuildResVectorProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 		VecAssemblyEnd(Res_nl);
 
-		DebugVisualizeMat(M,  work_dir + "debug/MMat.m");
-		DebugVisualizeMat(K,  work_dir + "debug/KMat.m");
-		DebugVisualizeMat(P[0],  work_dir + "debug/PxMat.m");
-		DebugVisualizeMat(P[1],  work_dir + "debug/PyMat.m");
+		// DebugVisualizeMat(M,  work_dir + "debug/MMat.m");
+		// DebugVisualizeMat(K,  work_dir + "debug/KMat.m");
+		// DebugVisualizeMat(P[0],  work_dir + "debug/PxMat.m");
+		// DebugVisualizeMat(P[1],  work_dir + "debug/PyMat.m");
 
 		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
-
 		TangentMatSetup();
-		ResidualVecSetup();
+		ResidualVecSetup(X);
 		ApplyBoundaryCondition(ctx);
 
-		DebugSubMat();
+		// DebugSubMat();
 		// DebugVisualizeMat(PCMat,  work_dir + "debug/PCMat.m");
-		DebugVisualizeMat(TanMat,  work_dir + "debug/TanMat_afterBC.m");
-		DebugVisualizeVec(ResVec,  work_dir + "debug/ResVec_afterBC.m");
+		// DebugVisualizeMat(TanMat,  work_dir + "debug/TanMat_afterBC.m");
+		// DebugVisualizeVec(ResVec,  work_dir + "debug/ResVec_afterBC.m");
 
 		t1 = time(NULL);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);		
@@ -2135,7 +2293,7 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		KSPSetOperators(ksp, TanMat, TanMat);
 
 		KSPSetFromOptions(ksp);
-		// KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
+		// // KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
 		{
 			IS isg_field[2];
 			KSP *subksp;
@@ -2143,26 +2301,12 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 			
 			KSPGetPC(ksp, &pc);
 			
-			ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg[0]);
-			ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg[1]);
+			ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint *nTstep, 0, 1, &isg_field[0]);
+			ISCreateStride(PETSC_COMM_WORLD, state_num *nPoint *nTstep, (state_num + ctrl_num) *nPoint *nTstep, 1, &isg_field[1]);
 
-
-			// PCSetType(pc,PCFIELDSPLIT);
 			PCFieldSplitSetIS(pc, "0", isg_field[0]);
 			PCFieldSplitSetIS(pc, "1", isg_field[1]);
-			
-			// PCFieldSplitSetType(pc, PC_COMPOSITE_SCHUR);
-			// PCFieldSplitSetSchurFactType(pc,PC_FIELDSPLIT_SCHUR_FACT_FULL);
-			// PCFieldSplitSetSchurPre(pc, PC_FIELDSPLIT_SCHUR_PRE_SELF, NULL);
 
-			// PCSetUp(pc);
-
-			// KSPSetType(ksp, KSPGMRES);
-			// KSPGMRESSetRestart(ksp, 500);
-			// KSPSetTolerances(ksp, 1.e-6, PETSC_DEFAULT, PETSC_DEFAULT, 10000);
-
-			// KSPSetInitialGuessNonzero(ksp, PETSC_TRUE);
-			// KSPSetUp(ksp);
 		}
 	
 		/*Solving the equation*/
@@ -2171,11 +2315,24 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &ResVec_test);
 		// ierr = VecSet(ResVec_test, 1.0);
 
-		// KSPSolve(ksp, ResVec_test, temp_solution);
+		// KSPSolve(ksp, ResVec_test, dX);
 
-		KSPSolve(ksp, ResVec, temp_solution);
+		KSPSolve(ksp, ResVec, dX);
 
-		KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
+		PetscReal ResVal;
+		PetscReal ResVal_y, ResVal_u, ResVal_l;
+		Vec dy, dl, du;
+		VecGetSubVector(ResVec, isg[0], &dy);
+		VecGetSubVector(ResVec, isg[1], &du);
+		VecGetSubVector(ResVec, isg[2], &dl);
+		VecNorm(dy, NORM_2, &ResVal_y);
+		VecNorm(du, NORM_2, &ResVal_u);
+		VecNorm(dl, NORM_2, &ResVal_l);
+
+
+		// VecNorm(ResVec, NORM_2, &ResVal);
+		PetscPrintf(PETSC_COMM_WORLD, "Residual: %f \n", ResVal_y+ResVal_u+ResVal_l);
+		//KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
 		PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
 		PetscInt its;
 		KSPGetIterationNumber(ksp, &its);
@@ -2186,54 +2343,140 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		t1 = time(NULL);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
 
-		// PetscViewer viewer;
-    	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
 
-		DebugVisualizeVec(temp_solution, work_dir + "debug/temp_solution.m");
+		DebugVisualizeVec(dX, work_dir + "debug/dX.m");
 
-		//ierr = VecAXPY(Y_k, 1.0, temp_solution);
+		CollectAndUpdateResult(dX, X);
 
-		/*Collect the solution from all processors*/
-		// Vec temp_solution_seq;
-		// VecScatter scatter_ctx;
-		// PetscReal    *_a;
-		// VecScatterCreateToAll(temp_solution, &scatter_ctx, &temp_solution_seq);
-		// VecScatterBegin(scatter_ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-		// VecScatterEnd(scatter_ctx, temp_solution, temp_solution_seq, INSERT_VALUES, SCATTER_FORWARD);
-		// VecGetArray(temp_solution_seq, &_a);		
-		// MPI_Barrier(comm);
-		
-		
-		// 	for(uint j = 0; j < nTstep; j++){
-		// 		for (uint i = 0; i < cpts.size(); i++){
-		// 			V_delta[3 * i] = PetscRealPart(_a[(state_num * 2 + ctrl_num) * i]);
-		// 			V_delta[3 * i + 1] = PetscRealPart(_a[(state_num * 2 + ctrl_num) * i + 1]);
-		// 			V_delta[3 * i + 2] = PetscRealPart(_a[(state_num * 2 + ctrl_num) * i + 2]);
-		// 			P_delta[i] = PetscRealPart(_a[(state_num * 2 + ctrl_num) * i + 3]);
-		// 		}
-		// 	}
+		VecAXPY(X, 1.0, dX);
 
-		// }
-		// VecRestoreArray(temp_solution_seq, &_a);
-		// VecScatterDestroy(&ctx);
-		// VecDestroy(&temp_solution_seq);
-		
-		// for (uint i = 0; i < cpts.size(); i++){
-		// 	Vel[3 * i] += V_delta[3 * i];
-		// 	Vel[3 * i + 1] += V_delta[3 * i + 1];
-		// 	Vel[3 * i + 2] += V_delta[3 * i + 2];
-		// 	Pre[i] += P_delta[i];
-		// }
-		// MPI_Barrier(comm);
-		// // /*Visualize the result*/
-		// // if (comRank == 0){
-		// // 	cout << "Visualizing...\n";
-		// // 	VisualizeVTK_ControlMesh(cpts, tmesh, l, fn);
-		// // }
-		// // MPI_Barrier(comm);
-		// // VisualizeVTK_PhysicalDomain(l, fn + "final_physics");
+		cout << "Visualizing...\n";
+		for(int i=0;i<nTstep;i++)
+		{
+			VisualizeVTK_ControlMesh_Burger(ctx->pts, ctx->mesh, i, l, work_dir + "test1/");
+			VisualizeVTK_PhysicalDomain(i, l, work_dir + "test1/");
+		}
+		PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
+		// getchar();
 	}
 	MPI_Barrier(comm);
+}
+
+void TransportOpt2D::CollectAndUpdateResult(Vec dx, Vec x)
+{
+	Vec dx_seq;
+	VecScatter scatter_ctx;
+	PetscReal *dx_array;
+	VecScatterCreateToAll(dx, &scatter_ctx, &dx_seq);
+	VecScatterBegin(scatter_ctx, dx, dx_seq, INSERT_VALUES, SCATTER_FORWARD);
+	VecScatterEnd(scatter_ctx, dx, dx_seq, INSERT_VALUES, SCATTER_FORWARD);
+	VecGetArray(dx_seq, &dx_array);
+	MPI_Barrier(comm);
+
+	// Update variable for visualization and residual vector computation
+	for (uint j = 0; j < nTstep; j++)
+	{
+		for (uint i = 0; i < nPoint; i++)
+		{
+			int A, B;
+			for(uint k =0; k< state_num;k++)
+			{
+				A = i + j * nPoint;
+				B = i + k * nPoint + j * nPoint * state_num;
+				State[k][A] += PetscRealPart(dx_array[B]);  
+			}
+			for(uint k =0; k< ctrl_num;k++)
+			{
+				A = i + j * nPoint;
+				B = i + k * nPoint + j * nPoint * ctrl_num + state_num * nPoint * nTstep;
+				Ctrl[k][A] += PetscRealPart(dx_array[B]);  
+			}
+			for(uint k =0; k< state_num;k++)
+			{
+				A = i + j * nPoint;
+				B = i + k * nPoint + j * nPoint * state_num + (state_num + ctrl_num) * nPoint * nTstep;
+				Lambda[k][A] += PetscRealPart(dx_array[B]);  
+			}
+			// V_delta[3 * i] = PetscRealPart(dx_array[(state_num * 2 + ctrl_num) * i]);
+			// V_delta[3 * i + 1] = PetscRealPart(dx_array[(state_num * 2 + ctrl_num) * i + 1]);
+			// V_delta[3 * i + 2] = PetscRealPart(dx_array[(state_num * 2 + ctrl_num) * i + 2]);
+			// P_delta[i] = PetscRealPart(dx_array[(state_num * 2 + ctrl_num) * i + 3]);
+		}
+	}
+
+	VecRestoreArray(dx_seq, &dx_array);
+	VecScatterDestroy(&scatter_ctx);
+	VecDestroy(&dx_seq);
+
+	// for (uint i = 0; i < cpts.size(); i++)
+	// {
+	// 	Vel[3 * i] += V_delta[3 * i];
+	// 	Vel[3 * i + 1] += V_delta[3 * i + 1];
+	// 	Vel[3 * i + 2] += V_delta[3 * i + 2];
+	// 	Pre[i] += P_delta[i];
+	// }
+}
+
+void TransportOpt2D::VisualizeVTK_ControlMesh_Burger(const vector<Vertex2D>& spt, const vector<Element2D>& mesh, int time, int step, string fn)
+{
+	stringstream ss;
+	ss << step << "_" << time;
+	
+	string fname = fn + "Result_"+ss.str()+"_CM.vtk";
+	// string fname = fn + "controlmesh_VelocityPressure.vtk";
+	ofstream fout;
+	fout.open(fname.c_str());
+	unsigned int i;
+	if (fout.is_open())
+	{
+		fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+		fout << "POINTS " << spt.size() << " float\n";
+		for (i = 0; i<spt.size(); i++)
+		{
+			fout << std::setprecision(9) << spt[i].coor[0]<< std::fixed << " "<< std::setprecision(9) <<spt[i].coor[1]<< std::fixed << " "<< std::setprecision(9) << spt[i].coor[2]<< std::fixed << "\n";
+		}
+		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+		}
+		fout << "\nCELL_TYPES " << mesh.size() << "\n";
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "9\n";
+		}
+		fout << "POINT_DATA " << spt.size() << "\n";
+		fout << "VECTORS y float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << State[1][i+ time * nPoint] << " " << 0 << "\n";
+		fout << "VECTORS u float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< Ctrl[1][i+ time * nPoint] << " " << 0 << "\n";
+		fout << "VECTORS lamda float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< Lambda[1][i+ time * nPoint] << " " << 0 << "\n";
+		fout.close();
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+
+	// string fname1 = fn + "velocityfield.txt";
+	// ofstream fout1;
+	// fout1.open(fname1.c_str());
+	// if (fout1.is_open())
+	// {
+	// 	for (uint i = 0; i<Vel.size() / 3; i++)
+	// 	{
+	// 		fout1 << Vel[i * 3] << " " << Vel[i * 3 + 1] << " " << Vel[i * 3 + 2] << "\n";
+	// 	}
+	// 	fout1.close();
+	// }
+	// else
+	// {
+	// 	cout << "Cannot open " << fname1 << "!\n";
+	// }
 }
 
 void TransportOpt2D::VisualizeVTK_ControlMesh(const vector<Vertex2D>& spt, const vector<Element2D>& mesh, int step, string fn)
@@ -2304,16 +2547,16 @@ void TransportOpt2D::VisualizeVTK_ControlMesh(const vector<Vertex2D>& spt, const
 	}
 }
 
-void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
+void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 {
 	vector<array<double, 3>> spt_all;//sample points
 	vector<double> sresult_all;
-	vector<array<int, 8>> sele_all;
+	vector<array<int, 4>> sele_all;
 	double detJ;
 	int num_bzmesh_ele = bzmesh_process.size();
-	double spt_proc[num_bzmesh_ele * 24];
-	double sresult_proc[num_bzmesh_ele * 32];
-	int sele_proc[num_bzmesh_ele * 8];
+	double spt_proc[num_bzmesh_ele * 4 * 3];
+	double sresult_proc[num_bzmesh_ele * 4 * result_num];
+	int sele_proc[num_bzmesh_ele * 4];
 	for (unsigned int e = 0; e<num_bzmesh_ele; e++)
 	{
 		int ns(2);
@@ -2328,37 +2571,33 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 		{
 			for (int b = 0; b<ns; b++)
 			{
-
 					double pt1[3], dudx[3];
-					double result[4];
-					ResultCal_Bezier(su[b], su[a], bzmesh_process[e], pt1, result, dudx, detJ);
-					spt_proc[24 * e + loc*3 + 0] = pt1[0];
-					spt_proc[24 * e + loc*3 + 1] = pt1[1];
-					spt_proc[24 * e + loc*3 + 2] = pt1[2];
-					sresult_proc[32 * e + loc * 4 + 0] = result[0];
-					sresult_proc[32 * e + loc * 4 + 1] = result[1];
-					sresult_proc[32 * e + loc * 4 + 2] = result[2];
-					sresult_proc[32 * e + loc * 4 + 3] = result[3];
+					double result[result_num];
+					ResultCal_Bezier(su[b], su[a], time, bzmesh_process[e], pt1, result, dudx, detJ);
+					spt_proc[4 * 3 * e + loc*3 + 0] = pt1[0];
+					spt_proc[4 * 3 * e + loc*3 + 1] = pt1[1];
+					spt_proc[4 * 3 * e + loc*3 + 2] = pt1[2];
+					for(int c = 0; c<result_num;c++)
+					{
+						sresult_proc[result_num * 4 * e + loc * result_num + c] = result[c];
+					}
+					// sresult_proc[32 * e + loc * 4 + 0] = result[0];
+					// sresult_proc[32 * e + loc * 4 + 1] = result[1];
+					// sresult_proc[32 * e + loc * 4 + 2] = result[2];
+					// sresult_proc[32 * e + loc * 4 + 3] = result[3];
 					loc++;
 				
 			}
 		}
-		int nns[2] = { ns*ns*ns, ns*ns };
+		int nns[2] = { ns*ns, ns };
 		for (int a = 0; a<ns - 1; a++)
 		{
 			for (int b = 0; b<ns - 1; b++)
 			{
-				for (int c = 0; c < ns - 1; c++)
-				{
-					sele_proc[8 * e + 0] = 8 * e + a*nns[1] + b*ns + c;
-					sele_proc[8 * e + 1] = 8 * e + a*nns[1] + b*ns + c + 1;
-					sele_proc[8 * e + 2] = 8 * e + a*nns[1] + (b + 1)*ns + c + 1;
-					sele_proc[8 * e + 3] = 8 * e + a*nns[1] + (b + 1)*ns + c;
-					sele_proc[8 * e + 4] = 8 * e + (a + 1)*nns[1] + b*ns + c;
-					sele_proc[8 * e + 5] = 8 * e + (a + 1)*nns[1] + b*ns + c + 1;
-					sele_proc[8 * e + 6] = 8 * e + (a + 1)*nns[1] + (b + 1)*ns + c + 1;
-					sele_proc[8 * e + 7] = 8 * e + (a + 1)*nns[1] + (b + 1)*ns + c;
-				}
+				sele_proc[4 * e + 0] = 4 * e + a * ns + b;
+				sele_proc[4 * e + 1] = 4 * e + a * ns + b + 1;
+				sele_proc[4 * e + 2] = 4 * e + (a + 1) * ns + (b + 1);
+				sele_proc[4 * e + 3] = 4 * e + (a + 1) * ns + b;
 			}
 		}
 	}
@@ -2387,8 +2626,8 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 
 	if (comRank == 0)
 	{
-		spts = (double*)malloc(sizeof(double) * 24 * n_bzmesh);
-		sresults = (double*)malloc(sizeof(double) * 32 * n_bzmesh);
+		spts = (double*)malloc(sizeof(double) * 3 * 4 * n_bzmesh);
+		sresults = (double*)malloc(sizeof(double) * result_num * 4 * n_bzmesh);
 		seles = (int*)malloc(sizeof(int) * 8 * n_bzmesh);
 
 		displs_spts = (int*)malloc(nProcess * sizeof(int));
@@ -2399,38 +2638,37 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 		displs_seles[0] = 0;
 
 		for (int i = 1; i<nProcess; i++) {
-			displs_spts[i] = displs_spts[i - 1] + num_bzmesh_eles[i - 1] * 24;
-			displs_sresults[i] = displs_sresults[i - 1] + num_bzmesh_eles[i - 1] * 32;
-			displs_seles[i] = displs_seles[i - 1] + num_bzmesh_eles[i - 1] * 8;
+			displs_spts[i] = displs_spts[i - 1] + num_bzmesh_eles[i - 1] * 3 * 4;
+			displs_sresults[i] = displs_sresults[i - 1] + num_bzmesh_eles[i - 1] * result_num * 4;
+			displs_seles[i] = displs_seles[i - 1] + num_bzmesh_eles[i - 1] * 4;
 		}
 
 		for (int i = 0; i < nProcess; i++)
 		{
-			recvcounts_spts[i] = num_bzmesh_eles[i] * 24;
-			recvcounts_sresults[i] = num_bzmesh_eles[i] * 32;
-			recvcounts_seles[i] = num_bzmesh_eles[i] * 8;
+			recvcounts_spts[i] = num_bzmesh_eles[i] * 4 * 3;
+			recvcounts_sresults[i] = num_bzmesh_eles[i] * 4 * result_num;
+			recvcounts_seles[i] = num_bzmesh_eles[i] * 4;
 		}
 	}	
 
-	MPI_Gatherv(spt_proc, num_bzmesh_ele * 8 * 3, MPI_DOUBLE, spts, recvcounts_spts, displs_spts, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
-	MPI_Gatherv(sresult_proc, num_bzmesh_ele * 8 * 4, MPI_DOUBLE, sresults, recvcounts_sresults, displs_sresults ,MPI_DOUBLE, 0, PETSC_COMM_WORLD);
-	MPI_Gatherv(sele_proc, num_bzmesh_ele * 8, MPI_INT, seles, recvcounts_seles, displs_seles, MPI_INT, 0, PETSC_COMM_WORLD);
+	MPI_Gatherv(spt_proc, num_bzmesh_ele * 4 * 3, MPI_DOUBLE, spts, recvcounts_spts, displs_spts, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+	MPI_Gatherv(sresult_proc, num_bzmesh_ele * 4 * result_num, MPI_DOUBLE, sresults, recvcounts_sresults, displs_sresults ,MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+	MPI_Gatherv(sele_proc, num_bzmesh_ele * 4, MPI_INT, seles, recvcounts_seles, displs_seles, MPI_INT, 0, PETSC_COMM_WORLD);
 	
 	
 	if (comRank == 0)
 	{
 		for (int i = 0; i < n_bzmesh; i++)
 		{
-			for (int j = 0; j < 8; j++)
+			for (int j = 0; j < 4; j++)
 			{
-				array<double, 3> pt = { spts[i * 24 + j * 3 + 0], spts[i * 24 + j * 3 + 1], spts[i * 24 + j * 3 + 2] };
+				array<double, 3> pt = { spts[i * 12 + j * 3 + 0], spts[i * 12 + j * 3 + 1], spts[i * 12 + j * 3 + 2] };
 				spt_all.push_back(pt);
-				sresult_all.push_back(sresults[i * 32 + j * 4 + 0]);
-				sresult_all.push_back(sresults[i * 32 + j * 4 + 1]);
-				sresult_all.push_back(sresults[i * 32 + j * 4 + 2]);
-				sresult_all.push_back(sresults[i * 32 + j * 4 + 3]);
-			}
-			
+				for(int c = 0; c<result_num;c++)
+				{
+					sresult_all.push_back(sresults[i * result_num * 4 + j * result_num + c]);
+				}
+			}			
 		}
 		int sum_ele = 0;
 		int pstart = 0;
@@ -2438,29 +2676,28 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
 		{
 			for (int e = 0; e < num_bzmesh_eles[i]; e++)
 			{
-				array<int, 8> el;
-				el[0] = pstart + seles[8 * sum_ele + 0];
-				el[1] = pstart + seles[8 * sum_ele + 1];
-				el[2] = pstart + seles[8 * sum_ele + 2];
-				el[3] = pstart + seles[8 * sum_ele + 3];
-				el[4] = pstart + seles[8 * sum_ele + 4];
-				el[5] = pstart + seles[8 * sum_ele + 5];
-				el[6] = pstart + seles[8 * sum_ele + 6];
-				el[7] = pstart + seles[8 * sum_ele + 7];
+				array<int, 4> el;
+				el[0] = pstart + seles[4 * sum_ele + 0];
+				el[1] = pstart + seles[4 * sum_ele + 1];
+				el[2] = pstart + seles[4 * sum_ele + 2];
+				el[3] = pstart + seles[4 * sum_ele + 3];
 				sele_all.push_back(el);
 				sum_ele++;
 			}
-			pstart = pstart + num_bzmesh_eles[i] * 8;
+			pstart = pstart + num_bzmesh_eles[i] * 4;
 		}
 		cout << "Visualizing in Physical Domain...\n";
-		WriteVTK(spt_all, sresult_all, sele_all, step, fn);
+		WriteVTK(spt_all, sresult_all, sele_all, time, step, fn);
 	}
 	
 }
 
-void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<double> sdisp, const vector<array<int,8>> sele, int step, string fn)
+void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<double> sdisp, const vector<array<int,4>> sele, int time, int step, string fn)
 {
-	string fname = fn + "_VelocityPressure.vtk";
+	stringstream ss;
+	ss << step << "_" << time;
+	
+	string fname = fn + + "Result_"+ss.str()+"_physical.vtk";
 	ofstream fout;
 	fout.open(fname.c_str());
 	unsigned int i;
@@ -2470,34 +2707,44 @@ void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<d
 		fout << "POINTS " << spt.size() << " float\n";
 		for (i = 0; i<spt.size(); i++)
 		{
-			fout << spt[i][0] << " " << spt[i][1] << " " << spt[i][2] << "\n";
+			fout << std::setprecision(9) << spt[i][0] << std::fixed<< " " << std::setprecision(9) << spt[i][1]<< std::fixed << " " << std::setprecision(9) << spt[i][2] << std::fixed<< "\n";
 		}
-		fout << "\nCELLS " << sele.size() << " " << 9 * sele.size() << '\n';
+		fout << "\nCELLS " << sele.size() << " " << 5 * sele.size() << '\n';
 		for (i = 0; i<sele.size(); i++)
 		{
-			fout << "8 " << sele[i][0] << " " << sele[i][1] << " " << sele[i][2] << " " << sele[i][3]
-				<< " " << sele[i][4] << " " << sele[i][5] << " " << sele[i][6] << " " << sele[i][7] << '\n';
+			fout << "4 " << sele[i][0] << " " << sele[i][1] << " " << sele[i][2] << " " << sele[i][3] << '\n';
 		}
 		fout << "\nCELL_TYPES " << sele.size() << '\n';
 		for (i = 0; i<sele.size(); i++)
 		{
-			fout << "12\n";
+			fout << "9\n";
 		}
-		fout << "POINT_DATA " << sdisp.size() / 4 << "\nVECTORS VelocityField float\n";
-		for (uint i = 0; i<sdisp.size() / 4; i++)
-		{
-			fout << sdisp[i * 4] << " " << sdisp[i * 4 + 1] << " " << sdisp[i * 4 + 2] << "\n";
-		}
-		fout << "\nSCALARS VelocityMagnitude float 1\nLOOKUP_TABLE default\n";
-		for (uint i = 0; i<sdisp.size() / 4; i++)
-		{
-			fout << sqrt(sdisp[i * 4] * sdisp[i * 4] + sdisp[i * 4 + 1] * sdisp[i * 4 + 1] + sdisp[i * 4 + 2] * sdisp[i * 4 + 2]) << "\n";
-		}
-		fout << "\nSCALARS Pressure float 1\nLOOKUP_TABLE default\n";
-		for (uint i = 0; i<sdisp.size() / 4; i++)
-		{
-			fout << sdisp[4 * i + 3] << "\n";
-		}
+		fout << "POINT_DATA " << sdisp.size() / result_num << "\n";
+		fout << "VECTORS y float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9) << sdisp[i*result_num+0]<< std::fixed << " " << std::setprecision(9) << sdisp[i*result_num+1] << std::fixed<< " " << 0 << "\n";
+		fout << "VECTORS u float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9) << sdisp[i*result_num+2] << std::fixed<< " " << std::setprecision(9) << sdisp[i*result_num+3] << std::fixed<< " " << 0 << "\n";
+		fout << "VECTORS lambda float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9) << sdisp[i*result_num+4]<< std::fixed << " " << std::setprecision(9) << sdisp[i*result_num+5] << std::fixed<< " " << 0 << "\n";
+
+
+		// for (uint i = 0; i<sdisp.size() / 4; i++)
+		// {
+		// 	fout << sdisp[i * 4] << " " << sdisp[i * 4 + 1] << " " << sdisp[i * 4 + 2] << "\n";
+		// }
+		// fout << "\nSCALARS VelocityMagnitude float 1\nLOOKUP_TABLE default\n";
+		// for (uint i = 0; i<sdisp.size() / 4; i++)
+		// {
+		// 	fout << sqrt(sdisp[i * 4] * sdisp[i * 4] + sdisp[i * 4 + 1] * sdisp[i * 4 + 1] + sdisp[i * 4 + 2] * sdisp[i * 4 + 2]) << "\n";
+		// }
+		// fout << "\nSCALARS Pressure float 1\nLOOKUP_TABLE default\n";
+		// for (uint i = 0; i<sdisp.size() / 4; i++)
+		// {
+		// 	fout << sdisp[4 * i + 3] << "\n";
+		// }
 		fout.close();
 	}
 	else
@@ -2506,7 +2753,7 @@ void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<d
 	}
 }
 
-void TransportOpt2D::ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ)
+void TransportOpt2D::ResultCal_Bezier(double u, double v, int time, const Element2D& bzel, double pt[3], double result[result_num], double dudx[3], double& detJ)
 {
 	double dUdx[dim][dim];
 	vector<double> Nx(bzel.IEN.size());
@@ -2514,12 +2761,243 @@ void TransportOpt2D::ResultCal_Bezier(double u, double v, const Element2D& bzel,
 	vector<array<array<double, dim>, dim>> dN2dx2;
 	bzel.Para2Phys(u, v, pt);
 	BasisFunction(u, v, bzel.IEN.size(), bzel.pts, bzel.cmat, Nx, dNdx,dN2dx2, dUdx, detJ);
-	result[0] = 0.; result[1] = 0.; result[2] = 0.; result[3] = 0.;
+	for(uint i =0; i< result_num;i++)
+		result[i] =0.0;
+
+	int count = 0;
 	for (uint i = 0; i < bzel.IEN.size(); i++)	{
-		result[0] += Nx[i] * (Vel[dim* bzel.IEN[i] + 0]);
-		result[1] += Nx[i] * (Vel[dim* bzel.IEN[i] + 1]);
-		result[2] += Nx[i] * (Vel[dim* bzel.IEN[i] + 2]);
-		result[3] += Nx[i] * (Pre[bzel.IEN[i]]);
+		for(uint j=0;j<state_num;j++)
+		{
+			result[j] += Nx[i] * State[j][bzel.IEN[i]+ time * nPoint]; 
+		}
+		for(uint j=0;j<ctrl_num;j++)
+		{
+			result[j + state_num] += Nx[i] * Ctrl[j][bzel.IEN[i]+ time * nPoint]; 
+		}
+		for(uint j=0;j<state_num;j++)
+		{
+			result[j+state_num + ctrl_num] += Nx[i] * Lambda[j][bzel.IEN[i]+ time * nPoint]; 
+		}
 	}
 }
+
+// For 3D 
+// void TransportOpt2D::VisualizeVTK_PhysicalDomain(int step, string fn)
+// {
+// 	vector<array<double, 3>> spt_all;//sample points
+// 	vector<double> sresult_all;
+// 	vector<array<int, 8>> sele_all;
+// 	double detJ;
+// 	int num_bzmesh_ele = bzmesh_process.size();
+// 	double spt_proc[num_bzmesh_ele * 24];
+// 	double sresult_proc[num_bzmesh_ele * 32];
+// 	int sele_proc[num_bzmesh_ele * 8];
+// 	for (unsigned int e = 0; e<num_bzmesh_ele; e++)
+// 	{
+// 		int ns(2);
+// 		vector<double> su(ns);
+// 		for (int i = 0; i < ns; i++)
+// 		{
+// 			su[i] = double(i) / (double(ns) - 1.);
+// 		}
+
+// 		int loc(0);
+// 		for (int a = 0; a<ns; a++)
+// 		{
+// 			for (int b = 0; b<ns; b++)
+// 			{
+
+// 					double pt1[3], dudx[3];
+// 					double result[4];
+// 					ResultCal_Bezier(su[b], su[a], bzmesh_process[e], pt1, result, dudx, detJ);
+// 					spt_proc[24 * e + loc*3 + 0] = pt1[0];
+// 					spt_proc[24 * e + loc*3 + 1] = pt1[1];
+// 					spt_proc[24 * e + loc*3 + 2] = pt1[2];
+// 					sresult_proc[32 * e + loc * 4 + 0] = result[0];
+// 					sresult_proc[32 * e + loc * 4 + 1] = result[1];
+// 					sresult_proc[32 * e + loc * 4 + 2] = result[2];
+// 					sresult_proc[32 * e + loc * 4 + 3] = result[3];
+// 					loc++;
+				
+// 			}
+// 		}
+// 		int nns[2] = { ns*ns*ns, ns*ns };
+// 		for (int a = 0; a<ns - 1; a++)
+// 		{
+// 			for (int b = 0; b<ns - 1; b++)
+// 			{
+// 				for (int c = 0; c < ns - 1; c++)
+// 				{
+// 					sele_proc[8 * e + 0] = 8 * e + a*nns[1] + b*ns + c;
+// 					sele_proc[8 * e + 1] = 8 * e + a*nns[1] + b*ns + c + 1;
+// 					sele_proc[8 * e + 2] = 8 * e + a*nns[1] + (b + 1)*ns + c + 1;
+// 					sele_proc[8 * e + 3] = 8 * e + a*nns[1] + (b + 1)*ns + c;
+// 					sele_proc[8 * e + 4] = 8 * e + (a + 1)*nns[1] + b*ns + c;
+// 					sele_proc[8 * e + 5] = 8 * e + (a + 1)*nns[1] + b*ns + c + 1;
+// 					sele_proc[8 * e + 6] = 8 * e + (a + 1)*nns[1] + (b + 1)*ns + c + 1;
+// 					sele_proc[8 * e + 7] = 8 * e + (a + 1)*nns[1] + (b + 1)*ns + c;
+// 				}
+// 			}
+// 		}
+// 	}
+	
+
+// 	double *spts= NULL;
+// 	double *sresults=NULL;
+// 	int *seles=NULL;
+// 	int *displs_spts = NULL;
+// 	int *displs_sresults = NULL;
+// 	int *displs_seles = NULL;
+// 	int *num_bzmesh_eles=NULL;
+// 	int *recvcounts_spts = NULL;
+// 	int *recvcounts_sresults = NULL;
+// 	int *recvcounts_seles = NULL;
+
+// 	if (comRank == 0)
+// 	{		
+// 		num_bzmesh_eles = (int*)malloc(sizeof(int)*nProcess);
+// 		recvcounts_spts = (int*)malloc(sizeof(int)*nProcess);
+// 		recvcounts_sresults = (int*)malloc(sizeof(int)*nProcess);
+// 		recvcounts_seles = (int*)malloc(sizeof(int)*nProcess);
+// 	}
+// 	MPI_Gather(&num_bzmesh_ele, 1, MPI_INT, num_bzmesh_eles, 1, MPI_INT, 0, PETSC_COMM_WORLD);
+// 	MPI_Barrier(comm);
+
+// 	if (comRank == 0)
+// 	{
+// 		spts = (double*)malloc(sizeof(double) * 24 * n_bzmesh);
+// 		sresults = (double*)malloc(sizeof(double) * 32 * n_bzmesh);
+// 		seles = (int*)malloc(sizeof(int) * 8 * n_bzmesh);
+
+// 		displs_spts = (int*)malloc(nProcess * sizeof(int));
+// 		displs_sresults = (int*)malloc(nProcess * sizeof(int));
+// 		displs_seles = (int*)malloc(nProcess * sizeof(int));
+// 		displs_spts[0] = 0;
+// 		displs_sresults[0] = 0;
+// 		displs_seles[0] = 0;
+
+// 		for (int i = 1; i<nProcess; i++) {
+// 			displs_spts[i] = displs_spts[i - 1] + num_bzmesh_eles[i - 1] * 24;
+// 			displs_sresults[i] = displs_sresults[i - 1] + num_bzmesh_eles[i - 1] * 32;
+// 			displs_seles[i] = displs_seles[i - 1] + num_bzmesh_eles[i - 1] * 8;
+// 		}
+
+// 		for (int i = 0; i < nProcess; i++)
+// 		{
+// 			recvcounts_spts[i] = num_bzmesh_eles[i] * 24;
+// 			recvcounts_sresults[i] = num_bzmesh_eles[i] * 32;
+// 			recvcounts_seles[i] = num_bzmesh_eles[i] * 8;
+// 		}
+// 	}	
+
+// 	MPI_Gatherv(spt_proc, num_bzmesh_ele * 8 * 3, MPI_DOUBLE, spts, recvcounts_spts, displs_spts, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+// 	MPI_Gatherv(sresult_proc, num_bzmesh_ele * 8 * 4, MPI_DOUBLE, sresults, recvcounts_sresults, displs_sresults ,MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+// 	MPI_Gatherv(sele_proc, num_bzmesh_ele * 8, MPI_INT, seles, recvcounts_seles, displs_seles, MPI_INT, 0, PETSC_COMM_WORLD);
+	
+	
+// 	if (comRank == 0)
+// 	{
+// 		for (int i = 0; i < n_bzmesh; i++)
+// 		{
+// 			for (int j = 0; j < 8; j++)
+// 			{
+// 				array<double, 3> pt = { spts[i * 24 + j * 3 + 0], spts[i * 24 + j * 3 + 1], spts[i * 24 + j * 3 + 2] };
+// 				spt_all.push_back(pt);
+// 				sresult_all.push_back(sresults[i * 32 + j * 4 + 0]);
+// 				sresult_all.push_back(sresults[i * 32 + j * 4 + 1]);
+// 				sresult_all.push_back(sresults[i * 32 + j * 4 + 2]);
+// 				sresult_all.push_back(sresults[i * 32 + j * 4 + 3]);
+// 			}
+			
+// 		}
+// 		int sum_ele = 0;
+// 		int pstart = 0;
+// 		for (int i = 0; i < nProcess; i++)
+// 		{
+// 			for (int e = 0; e < num_bzmesh_eles[i]; e++)
+// 			{
+// 				array<int, 8> el;
+// 				el[0] = pstart + seles[8 * sum_ele + 0];
+// 				el[1] = pstart + seles[8 * sum_ele + 1];
+// 				el[2] = pstart + seles[8 * sum_ele + 2];
+// 				el[3] = pstart + seles[8 * sum_ele + 3];
+// 				el[4] = pstart + seles[8 * sum_ele + 4];
+// 				el[5] = pstart + seles[8 * sum_ele + 5];
+// 				el[6] = pstart + seles[8 * sum_ele + 6];
+// 				el[7] = pstart + seles[8 * sum_ele + 7];
+// 				sele_all.push_back(el);
+// 				sum_ele++;
+// 			}
+// 			pstart = pstart + num_bzmesh_eles[i] * 8;
+// 		}
+// 		cout << "Visualizing in Physical Domain...\n";
+// 		WriteVTK(spt_all, sresult_all, sele_all, step, fn);
+// 	}
+	
+// }
+
+// void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<double> sdisp, const vector<array<int,8>> sele, int step, string fn)
+// {
+// 	string fname = fn + "_VelocityPressure.vtk";
+// 	ofstream fout;
+// 	fout.open(fname.c_str());
+// 	unsigned int i;
+// 	if (fout.is_open())
+// 	{
+// 		fout << "# vtk DataFile Version 2.0\nHex test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+// 		fout << "POINTS " << spt.size() << " float\n";
+// 		for (i = 0; i<spt.size(); i++)
+// 		{
+// 			fout << spt[i][0] << " " << spt[i][1] << " " << spt[i][2] << "\n";
+// 		}
+// 		fout << "\nCELLS " << sele.size() << " " << 9 * sele.size() << '\n';
+// 		for (i = 0; i<sele.size(); i++)
+// 		{
+// 			fout << "8 " << sele[i][0] << " " << sele[i][1] << " " << sele[i][2] << " " << sele[i][3]
+// 				<< " " << sele[i][4] << " " << sele[i][5] << " " << sele[i][6] << " " << sele[i][7] << '\n';
+// 		}
+// 		fout << "\nCELL_TYPES " << sele.size() << '\n';
+// 		for (i = 0; i<sele.size(); i++)
+// 		{
+// 			fout << "12\n";
+// 		}
+// 		fout << "POINT_DATA " << sdisp.size() / 4 << "\nVECTORS VelocityField float\n";
+// 		for (uint i = 0; i<sdisp.size() / 4; i++)
+// 		{
+// 			fout << sdisp[i * 4] << " " << sdisp[i * 4 + 1] << " " << sdisp[i * 4 + 2] << "\n";
+// 		}
+// 		fout << "\nSCALARS VelocityMagnitude float 1\nLOOKUP_TABLE default\n";
+// 		for (uint i = 0; i<sdisp.size() / 4; i++)
+// 		{
+// 			fout << sqrt(sdisp[i * 4] * sdisp[i * 4] + sdisp[i * 4 + 1] * sdisp[i * 4 + 1] + sdisp[i * 4 + 2] * sdisp[i * 4 + 2]) << "\n";
+// 		}
+// 		fout << "\nSCALARS Pressure float 1\nLOOKUP_TABLE default\n";
+// 		for (uint i = 0; i<sdisp.size() / 4; i++)
+// 		{
+// 			fout << sdisp[4 * i + 3] << "\n";
+// 		}
+// 		fout.close();
+// 	}
+// 	else
+// 	{
+// 		cout << "Cannot open " << fname << "!\n";
+// 	}
+// }
+
+// void TransportOpt2D::ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ)
+// {
+// 	double dUdx[dim][dim];
+// 	vector<double> Nx(bzel.IEN.size());
+// 	vector<array<double, dim>> dNdx(bzel.IEN.size());
+// 	vector<array<array<double, dim>, dim>> dN2dx2;
+// 	bzel.Para2Phys(u, v, pt);
+// 	BasisFunction(u, v, bzel.IEN.size(), bzel.pts, bzel.cmat, Nx, dNdx,dN2dx2, dUdx, detJ);
+// 	result[0] = 0.; result[1] = 0.; result[2] = 0.; result[3] = 0.;
+// 	for (uint i = 0; i < bzel.IEN.size(); i++)	{
+// 		result[0] += Nx[i] * (Vel[dim* bzel.IEN[i] + 0]);
+// 		result[1] += Nx[i] * (Vel[dim* bzel.IEN[i] + 1]);
+// 		result[2] += Nx[i] * (Vel[dim* bzel.IEN[i] + 2]);
+// 		result[3] += Nx[i] * (Pre[bzel.IEN[i]]);
+// 	}
+// }
 
