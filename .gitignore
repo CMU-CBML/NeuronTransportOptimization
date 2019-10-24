@@ -261,6 +261,7 @@ __pycache__/
 *.pyc
 src/*.o
 src_burger/*.o
+src_heat/*.o
 src/debug/
 io/**/debug/
 io/**/test1/

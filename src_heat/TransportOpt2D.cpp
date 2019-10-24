@@ -324,37 +324,30 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			if (ctx->bc_flag[i] == -1)
 			{
 				State[0][i+j*nPoint] = ctx->val_bc[0][i];
-				State[1][i+j*nPoint] = ctx->val_bc[1][i];
+				// State[1][i+j*nPoint] = ctx->val_bc[1][i];
 				continue;
 			}
 			else if (ctx->bc_flag[i] == -2)
 			{
 				State[0][i+j*nPoint] = ctx->val_bc[0][i];
-				State[1][i+j*nPoint] = ctx->val_bc[1][i];
+				// State[1][i+j*nPoint] = ctx->val_bc[1][i];
 				continue;
 			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				State[1][i+j*nPoint] = ctx->val_bc[1][i];
-				continue;
-			}
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	State[1][i+j*nPoint] = ctx->val_bc[1][i];
+			// 	continue;
+			// }
 		}
 	}
 
 	// control variables
-	for(int i = 0; i < dim; i++)
-	{
-		f_plus[i].resize(nPoint * nTstep);
-		f_minus[i].resize(nPoint * nTstep);
-	}
 	for(int i = 0; i < ctrl_num; i++)
 	{
 		Ctrl[i].resize(nPoint * nTstep, 0.0);
 	}
 
 	// penalty variables
-	for(int i = 0; i < state_num; i++)
-		lambda[i].resize(nPoint * nTstep);
 	for(int i = 0; i < state_num; i++)
 	{
 		Lambda[i].resize(nPoint * nTstep, 0.0);
@@ -367,20 +360,20 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			if (ctx->bc_flag[i] == -1)
 			{
 				Lambda[0][i+j*nPoint] = ctx->val_bc[0][i];
-				Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
+				// Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
 				continue;
 			}
 			else if (ctx->bc_flag[i] == -2)
 			{
 				Lambda[0][i+j*nPoint] = ctx->val_bc[0][i];
-				Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
+				// Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
 				continue;
 			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
-				continue;
-			}
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	Lambda[1][i+j*nPoint] = ctx->val_bc[1][i];
+			// 	continue;
+			// }
 		}
 	}
 
@@ -460,7 +453,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	PetscInt *col_yk, *col_yd;
 	PetscReal *vals_yk, *vals_yd;
 
-	// * Setup Desire State Vec
+	// ! Setup Desire State Vec
 	PetscMalloc1(nPoint * state_num * nTstep, &col_yd);
 	PetscMalloc1(nPoint * state_num * nTstep, &vals_yd);
 
@@ -489,16 +482,16 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 
 	cout << "Set Y_d Done!\n";
 
-	// * Setup Initial State Vec with BC
+	// ! Setup Initial State Vec with BC
 	count = 0;
 	for(int i =0; i<ctx->bc_flag.size();i++)
 	{
 		if(ctx->bc_flag[i] == -1)
-			count += 2;
-		else if(ctx->bc_flag[i] == -2)
-			count += 2;
-		else if(ctx->bc_flag[i] == -3)
 			count += 1;
+		// else if(ctx->bc_flag[i] == -2)
+		// 	count += 2;
+		// else if(ctx->bc_flag[i] == -3)
+		// 	count += 1;
 	}
 	n_bcval = count;
 
@@ -513,23 +506,23 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			if(ctx->bc_flag[i] == -1)
 			{
 				col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
-				col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
-				count += 2;
-				continue;
-			}
-			else if(ctx->bc_flag[i] == -2)
-			{
-				col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
-				col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
-				count += 2;
-				continue;
-			}
-			else if(ctx->bc_flag[i] == -3)
-			{
-				col_yk[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[1][i];
+				// col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
 				count += 1;
 				continue;
 			}
+			// else if(ctx->bc_flag[i] == -2)
+			// {
+			// 	col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[0][i];
+			// 	col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 1] = ctx->val_bc[1][i];
+			// 	count += 2;
+			// 	continue;
+			// }
+			// else if(ctx->bc_flag[i] == -3)
+			// {
+			// 	col_yk[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[1][i];
+			// 	count += 1;
+			// 	continue;
+			// }
 			// else if (ctx->bc_flag[i] == -3)
 			// {
 			// 	col_yk[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[3][i];
@@ -910,28 +903,6 @@ void TransportOpt2D::StableMatAssembly(vector<vector<double>>Emat, const vector<
 		}
 	}
 
-	// for (i = 0; i < state_num; i++)
-	// {
-	// 	add = 0;
-	// 	for (j = 0; j < nTstep; j++)
-	// 	{
-	// 		for (m = 0; m < nen; m++)
-	// 		{
-	// 			A = IEN[m] + i * nPoint + j * state_num * nPoint;
-	// 			nodeList[m + j * nen] = A;
-	// 			for (n = 0; n < nen; n++)
-	// 			{
-	// 				B = IEN[n] + j * state_num * nPoint;
-	// 				// tmpGmat[add] = Emat[m + i * nen + j *state_num*nen][n + j *state_num*nen];
-	// 				tmpGmat[add] = Emat[m  + j * nen][n + j * nen];
-	// 				add++;
-	// 			}
-	// 		}
-	// 	}
-	// 	MatSetValues(Gmat, IEN.size()* nTstep, nodeList, IEN.size()* nTstep, nodeList, tmpGmat, ADD_VALUES);
-	// }
-
-
 	PetscFree(nodeList);
 	PetscFree(tmpGmat);
 	
@@ -1174,7 +1145,7 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], v
 	vector<double> n0_node, nplus_node, nminus_node;
 	// vector<double> vplus_node[dim], vminus_node[dim];
 	n0_node.clear(); n0_node.resize(nen, 0.0);
-	nplus_node.clear(); nplus_node.resize(nen, 0.0);
+	// nplus_node.clear(); nplus_node.resize(nen, 0.0);
 	// nminus_node.clear(); nminus_node.resize(nen, 0);
 	// for (int i = 0; i < dim; i++)
 	// {
@@ -1199,7 +1170,7 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], v
 				// // vminus_node[0][i] = Vel_minus[0][A];
 				// // vminus_node[1][i] = Vel_minus[1][A];
 				n0_node[i] = State[0][A];
-				nplus_node[i] = State[1][A];
+				// nplus_node[i] = State[1][A];
 				// nminus_node[i] = State[2][A];
 				// vplus_node[0][i] = State[3][A];
 				// vplus_node[1][i] = State[4][A];
@@ -1210,7 +1181,7 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], v
 			{
 				int A = IEN[i];
 				n0_node[i] = val_ini[0][A];
-				nplus_node[i] = val_ini[1][A];
+				// nplus_node[i] = val_ini[1][A];
 				// nminus_node[i] = val_ini[2][A];
 				// vplus_node[0][i] = val_ini[3][A];
 				// vplus_node[1][i] = val_ini[4][A];
@@ -1226,10 +1197,10 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], v
 		PointFormValue(Nx, n0_node, n0Val);
 		PointFormGrad(dNdx, n0_node, n0Grad);
 
-		PointFormValue(Nx, nplus_node, npVal);
+		// PointFormValue(Nx, nplus_node, npVal);
 		// PointFormValue(Nx, vplus_node[0], vpxVal);
 		// PointFormValue(Nx, vplus_node[1], vpyVal);
-		PointFormGrad(dNdx, nplus_node, npGrad);
+		// PointFormGrad(dNdx, nplus_node, npGrad);
 		// PointFormGrad(dNdx, vplus_node[0], vpxGrad);
 		// PointFormGrad(dNdx, vplus_node[1], vpyGrad);
 
@@ -1240,19 +1211,19 @@ void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], v
 		// PointFormGrad(dNdx, vminus_node[0], vmxGrad);
 		// PointFormGrad(dNdx, vminus_node[1], vmyGrad);
 
-		 for(int i =0; i< nen;i++)
-		 {
-		 	//for(int k =0; k< state_num; k++)
-		 	{
-		 		qtmp[i + nen * 0 + j * nen * state_num] -= Nx[i] * (n0Val * n0Grad[0] + npVal * n0Grad[1]) * detJ * dt;
-		 		qtmp[i + nen * 1 + j * nen * state_num] -= Nx[i] * (n0Val * npGrad[0] + npVal * npGrad[1]) * detJ * dt;
-		 	}
-		 }
+		//  for(int i =0; i< nen;i++)
+		//  {
+		//  	//for(int k =0; k< state_num; k++)
+		//  	{
+		//  		qtmp[i + nen * 0 + j * nen * state_num] -= Nx[i] * (n0Val * n0Grad[0] + npVal * n0Grad[1]) * detJ * dt;
+		//  		qtmp[i + nen * 1 + j * nen * state_num] -= Nx[i] * (n0Val * npGrad[0] + npVal * npGrad[1]) * detJ * dt;
+		//  	}
+		//  }
 
 		for(int i =0; i< nen;i++)
 		{
 			qtmp[i + nen * 0] += Nx[i] * n0Val * detJ;
-			qtmp[i + nen * 1] += Nx[i] * npVal * detJ;
+			// qtmp[i + nen * 1] += Nx[i] * npVal * detJ;
 		}
 
 
@@ -1365,20 +1336,20 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		}
 		// getchar();
 
-		for (int i = 0; i < Gpt.size(); i++)
-		{
-			for (int j = 0; j < Gpt.size(); j++)
-			{
-				BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
-				L2Projection(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
-				detJ_all +=detJ;
-			}
-		}
+		// for (int i = 0; i < Gpt.size(); i++)
+		// {
+		// 	for (int j = 0; j < Gpt.size(); j++)
+		// 	{
+		// 		BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
+		// 		L2Projection(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
+		// 		detJ_all +=detJ;
+		// 	}
+		// }
 
-		for(int i=0;i<wdNdx_proj.size();i++)
-		{
-			wdNdx_proj[i]/=detJ_all;
-		}
+		// for(int i=0;i<wdNdx_proj.size();i++)
+		// {
+		// 	wdNdx_proj[i]/=detJ_all;
+		// }
 
 		for (int i = 0; i < Gpt.size(); i++){
 			for (int j = 0; j < Gpt.size(); j++){
@@ -1388,7 +1359,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 					ComputeStiffMatrix(dNdx, detJ, Ktmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
 					ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
-					ComputeStableMatrix(val_ini, h, wdNdx_proj, Nx, dNdx, dN2dx2, detJ, bzmesh_process[e].IEN, Stabletmp);
+					// ComputeStableMatrix(val_ini, h, wdNdx_proj, Nx, dNdx, dN2dx2, detJ, bzmesh_process[e].IEN, Stabletmp);
 					// ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
 			}
 		}
@@ -1400,7 +1371,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		MatrixAssembly(Ktmp, bzmesh_process[e].IEN, K);
 		MatrixAssembly(Pxtmp, bzmesh_process[e].IEN, P[0]);
 		MatrixAssembly(Pytmp, bzmesh_process[e].IEN, P[1]);
-		StableMatAssembly(Stabletmp, bzmesh_process[e].IEN, Stable);
+		// StableMatAssembly(Stabletmp, bzmesh_process[e].IEN, Stable);
 	
 	}
 	cout << "Process " << comRank << " :complete build matrix and vector!\n";
@@ -1409,7 +1380,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
-	MatAssemblyBegin(Stable, MAT_FINAL_ASSEMBLY);
+	// MatAssemblyBegin(Stable, MAT_FINAL_ASSEMBLY);
 	// VecAssemblyBegin(Res_nl);
 }
 
@@ -1526,19 +1497,27 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 		// 	scale = scale * 0.5 * dt;
 		// else
 		// 	scale = scale * dt;
-		
-		// !trapezoidal rule
-		if(ind_time == 0 || ind_time == (nTstep - 1))
-			scale = 0.5 * dt;
-		else
-			scale = dt;
-
-		// // !rectangle rule
-		// if(ind_time == (nTstep - 1))
-		// 	scale = 0.0;
-		// else
-		// 	scale = dt;
-
+		switch(time_int)
+		{
+			case 0:
+				// !steady state
+				scale = 1.0;
+				break;
+			case 1:
+				// !trapezoidal rule
+				if(ind_time == 0 || ind_time == (nTstep - 1))
+					scale = 0.5 * dt;
+				else
+					scale = dt;
+				break;
+			case 2:
+				// !rectangle rule
+				if(ind_time == (nTstep - 1))
+					scale = 0.0;
+				else
+					scale = dt;
+				break;
+		}
 		
 		for(int i = 0; i < ncols_a; i++)
 		{
@@ -1575,7 +1554,7 @@ void TransportOpt2D::FormMatrixA12(Mat M, Mat K, Mat &A)
     MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
 
-// ! Not used, compute A23 and take transpose
+// ! Not used. Compute A31 and transpose to get A13
 void TransportOpt2D::FormMatrixA13(Mat M, Mat K, Mat P[dim], Mat &A)
 {
     PetscInt row, start, end;  
@@ -1805,14 +1784,29 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
 		case 1:
 			scale = beta1;
 			break;
-		default:
-			break;
 		}
 
-		if(ind_time == 0 || ind_time == (nTstep - 1) )
-			scale = scale * 0.5 * dt;
-		else
-			scale = scale * dt;
+		switch(time_int)
+		{
+			case 0:
+				// !steady state
+				scale = scale;
+				break;
+			case 1:
+				// !trapezoidal rule
+				if(ind_time == 0 || ind_time == (nTstep - 1))
+					scale = scale * 0.5 * dt;
+				else
+					scale = scale * dt;
+				break;
+			case 2:
+				// !rectangle rule
+				if(ind_time == (nTstep - 1))
+					scale = 0.0;
+				else
+					scale = scale * dt;
+				break;
+		}
 
 		for(int i = 0; i < ncols_m; i++)
 		{
@@ -1856,7 +1850,23 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 		PetscMalloc1(ncols_m, &col);
 		PetscMalloc1(ncols_m, &vals);
 
-		scale = -dt;
+		switch(time_int)
+		{
+			case 0:
+				// !steady state
+				scale = -1.0;
+				break;
+			case 1:
+				// !trapezoidal rule
+				scale = -dt;
+				break;
+			case 2:
+				// !rectangle rule
+				scale = -dt;
+				break;
+		}
+
+		
 		for(int i = 0; i < ncols_m; i++)
 		{
 			vals[i] = vals_m[i]*scale;
@@ -1867,7 +1877,15 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 
 		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
 	}
+
+	// PetscFree(col);
+	// PetscFree(vals);
+
+	// delete col;
+	// delete vals;
+	// delete vals_m;
 }
+
 
 void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 {
@@ -1876,7 +1894,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	MatCreate(PETSC_COMM_WORLD, &A);
     MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
     MatSetType(A,MATMPIAIJ);
-    MatMPIAIJSetPreallocation(A, nPoint * 2, NULL, nPoint * 2, NULL);
+    MatMPIAIJSetPreallocation(A, nPoint * state_num, NULL, nPoint * state_num, NULL);
 	// MatSetOption(A,MAT_NEW_NONZERO_ALLOCATION_ERR,PETSC_FALSE);
 	MatSetUp(A);
 	PetscObjectSetName((PetscObject) A, "Asub31");
@@ -1892,8 +1910,6 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		PetscInt *col;
 		PetscReal *vals;
 		PetscReal scale;
-
-
 
 		// cout << "Output M_row, K_row Done!\n";
 
@@ -1911,70 +1927,80 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		// 	cout << "Col: "<< cols_m[i] << " Value: " << vals_m[i] <<endl;
 
 		// cout << "ind_time: " << ind_time << " ind_point: " << ind_point<< " ind_var: " << ind_var <<"\n";
-		if(ind_time > 0)
+		if(time_int != 0)
 		{
-			switch (ind_var)
+			if (ind_time > 0)
 			{
-			case 0:
-				// PetscInt *col = new PetscInt[4 * nPoint];
-				// PetscReal *vals = new PetscReal[4 * nPoint];
-				PetscMalloc1(2 * ncols_m, &col);
-				PetscMalloc1(2 * ncols_m, &vals);
-				for(int i = 0; i < ncols_m; i++)
+				switch (ind_var)
 				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+				case 0:
+					PetscMalloc1(2 * ncols_m, &col);
+					PetscMalloc1(2 * ncols_m, &vals);
+					for (int i = 0; i < ncols_m; i++)
+					{
+						vals[i + 0 * ncols_m] = -vals_m[i];
+						vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
+						col[i + 0 * ncols_m] = cols_m[i] + 0 * nPoint + (ind_time - 1) * nPoint * state_num;
+						col[i + 1 * ncols_m] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					}
+					MatSetValues(A, 1, &row, ncols_m * 2, col, vals, INSERT_VALUES);
+
+					break;
+				case 1:
+					PetscMalloc1(2 * ncols_m, &col);
+					PetscMalloc1(2 * ncols_m, &vals);
+					for (int i = 0; i < ncols_m; i++)
+					{
+						vals[i + 0 * ncols_m] = -vals_m[i];
+						vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
+						col[i + 0 * ncols_m] = cols_m[i] + 1 * nPoint + (ind_time - 1) * nPoint * state_num;
+						col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					}
+					MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
+					break;
 				}
-				MatSetValues(A, 1, &row, ncols_m * 2, col, vals, INSERT_VALUES);
-				// PetscFree(col);
-				// PetscFree(vals);
-				break;
-			case 1:
-				PetscMalloc1(2 * ncols_m, &col);
-				PetscMalloc1(2 * ncols_m , &vals);
-				for( int i=0;i<ncols_m;i++)
+			}
+			else
+			{
+				switch (ind_var)
 				{
-					vals[i + 0 * ncols_m] = -vals_m[i];
-					vals[i + 1 * ncols_m] = vals_m[i] + dt * par[0] * vals_k[i];
-					col[i + 0 * ncols_m] = cols_m[i] + 1 * nPoint + (ind_time - 1) * nPoint * state_num;
-					col[i + 1 * ncols_m] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+				case 0:
+					PetscMalloc1(1 * ncols_m, &col);
+					PetscMalloc1(1 * ncols_m, &vals);
+					for (int i = 0; i < ncols_m; i++)
+					{
+						vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
+						col[i] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
+					}
+					MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
+
+					break;
+				case 1:
+					PetscMalloc1(1 * ncols_m, &col);
+					PetscMalloc1(1 * ncols_m, &vals);
+					for (int i = 0; i < ncols_m; i++)
+					{
+						vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
+						col[i] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
+					}
+					MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
+					break;
 				}
-				MatSetValues(A, 1, &row, (2 * ncols_m), col, vals, INSERT_VALUES);
-				break;
 			}
 		}
 		else
 		{
-			switch (ind_var)
+			PetscMalloc1(1 * ncols_k, &col);
+			PetscMalloc1(1 * ncols_k, &vals);
+			for (int i = 0; i < ncols_k; i++)
 			{
-			case 0:
-				// PetscInt *col = new PetscInt[4 * nPoint];
-				// PetscReal *vals = new PetscReal[4 * nPoint];
-				PetscMalloc1(1 * ncols_m, &col);
-				PetscMalloc1(1 * ncols_m, &vals);
-				for(int i = 0; i < ncols_m; i++)
-				{
-					vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
-					col[i] = cols_m[i] + 0 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
-				// PetscFree(col);
-				// PetscFree(vals);
-				break;
-			case 1:
-				PetscMalloc1(1 * ncols_m, &col);
-				PetscMalloc1(1 * ncols_m , &vals);
-				for( int i=0;i<ncols_m;i++)
-				{
-					vals[i] = vals_m[i] + dt * par[0] * vals_k[i];
-					col[i] = cols_m[i] + 1 * nPoint + ind_time * nPoint * state_num;
-				}
-				MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
-				break;
+				vals[i] = par[0] * vals_k[i];
+				col[i] = cols_k[i];
 			}
+			MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
 		}
+		
+		
 		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
 		MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
 		MatRestoreRow(P[0],ind_point,NULL,NULL,&vals_px);
@@ -1984,7 +2010,7 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	// delete vals_m, vals_k, vals_px, vals_py;
 }
 
-// ! Not used, compute A23 and take transpose
+// ! Not used, compute A23 and transpose to get A32
 void TransportOpt2D::FormMatrixA32(Mat M, Mat K, Mat &A)
 {
 	PetscInt ind_point, ind_var, ind_time;
@@ -2030,15 +2056,15 @@ void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
 	MatSetUp(A);
 	PetscObjectSetName((PetscObject) A, "Asub33");
 
-	// //explicitly set diagonal to be zero
-	// PetscInt row, start, end;  
-	// MatGetOwnershipRange(A,&start,&end);
-	// for(row = start; row < end; row++)
-	// 	MatSetValue(A, row, row, 0.0, INSERT_VALUES);
+	//explicitly set diagonal to be zero
+	PetscInt row, start, end;  
+	MatGetOwnershipRange(A,&start,&end);
+	for(row = start; row < end; row++)
+		MatSetValue(A, row, row, 0.0, INSERT_VALUES);
 
 
-	// // MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
-    // // MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
+	// MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
+    // MatAssemblyEnd(A, MAT_FINAL_ASSEMBLY);
 }
 
 void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
@@ -2056,28 +2082,26 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 			if(ctx->bc_flag[i] == -1)
 			{
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				
-				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;
 				bc_vals[count + 0] = ctx->val_bc[0][i]-State[0][i + j * nPoint];				
-				bc_vals[count + 1] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
-				count += 2;
-				continue;
-			}
-			else if(ctx->bc_flag[i] == -2)
-			{
-				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				
-				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;			
-				bc_vals[count + 0] = ctx->val_bc[0][i]-State[0][i + j * nPoint];	
-				bc_vals[count + 1] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
-				count += 2;
-				continue;
-			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				
-				bc_vals[count + 0] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
 				count += 1;
 				continue;
 			}
+			// else if(ctx->bc_flag[i] == -2)
+			// {
+			// 	bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint;				
+			// 	bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;			
+			// 	bc_vals[count + 0] = ctx->val_bc[0][i]-State[0][i + j * nPoint];	
+			// 	bc_vals[count + 1] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
+			// 	count += 2;
+			// 	continue;
+			// }
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				
+			// 	bc_vals[count + 0] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
+			// 	count += 1;
+			// 	continue;
+			// }
 			// else if (ctx->bc_flag[i] == -3)
 			// {
 			// 	bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
@@ -2090,47 +2114,6 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 		}
 	}
 
-	// for(int j=0;j<nTstep;j++)
-	// {
-	// 	for(int i=0;i<ctx->bc_flag.size();i++)
-	// 	{
-	// 		if(ctx->bc_flag[i] == -1)
-	// 		{
-	// 			bc_global_ids[count + 0] = i + 0 * nPoint + j * ctrl_num * nPoint + (state_num) *nPoint *nTstep;				
-	// 			bc_global_ids[count + 1] = i + 1 * nPoint + j * ctrl_num * nPoint + (state_num) *nPoint *nTstep;	
-	// 			bc_vals[count + 0] = 0.0 - Ctrl[0][i + j * nPoint];
-	// 			bc_vals[count + 1] = 0.0 - Ctrl[1][i + j * nPoint];
-	// 			count += 2;
-	// 			continue;
-	// 		}
-	// 		else if(ctx->bc_flag[i] == -2)
-	// 		{
-	// 			bc_global_ids[count + 0] = i + 0 * nPoint + j * ctrl_num * nPoint + (state_num) *nPoint *nTstep;
-	// 			bc_global_ids[count + 1] = i + 1 * nPoint + j * ctrl_num * nPoint + (state_num) *nPoint *nTstep;
-	// 			bc_vals[count + 0] = 0.0 - Ctrl[0][i + j * nPoint];
-	// 			bc_vals[count + 1] = 0.0 - Ctrl[1][i + j * nPoint];
-	// 			count += 2;
-	// 			continue;
-	// 		}
-	// 		else if (ctx->bc_flag[i] == -3)
-	// 		{
-	// 			bc_global_ids[count + 0] = i + 1 * nPoint + j * ctrl_num * nPoint + (state_num) *nPoint *nTstep;				
-	// 			bc_vals[count + 0] = 0.0 - Ctrl[1][i + j * nPoint];
-	// 			count += 1;
-	// 			continue;
-	// 		}
-	// // 		// else if (ctx->bc_flag[i] == -3)
-	// // 		// {
-	// // 		// 	bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
-	// // 		// 	bc_global_ids[count + 1] = i + 4 * nPoint + j * state_num * nPoint;				bc_vals[count + 1] = ctx->val_bc[4][i]-ctx->val_bc[4][i];
-	// // 		// 	bc_global_ids[count + 2] = i + 5 * nPoint + j * state_num * nPoint;				bc_vals[count + 2] = ctx->val_bc[5][i]-ctx->val_bc[5][i];
-	// // 		// 	bc_global_ids[count + 3] = i + 6 * nPoint + j * state_num * nPoint;				bc_vals[count + 3] = ctx->val_bc[6][i]-ctx->val_bc[6][i];
-	// // 		// 	count += 4;
-	// // 		// 	continue;
-	// // 		// }
-	// 	}
-	// }
-
 	for(int j=0;j<nTstep;j++)
 	{
 		for(int i=0;i<ctx->bc_flag.size();i++)
@@ -2138,28 +2121,28 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 			if(ctx->bc_flag[i] == -1)
 			{
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				
-				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;	
+				// bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;	
 				bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
-				bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
-				count += 2;
-				continue;
-			}
-			else if(ctx->bc_flag[i] == -2)
-			{
-				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;
-				bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;
-				bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
-				bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
-				count += 2;
-				continue;
-			}
-			else if (ctx->bc_flag[i] == -3)
-			{
-				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				
-				bc_vals[count + 0] = 0.0 - Lambda[1][i + j * nPoint];
+				// bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
 				count += 1;
 				continue;
 			}
+			// else if(ctx->bc_flag[i] == -2)
+			// {
+			// 	bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;
+			// 	bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;
+			// 	bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
+			// 	bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
+			// 	count += 2;
+			// 	continue;
+			// }
+			// else if (ctx->bc_flag[i] == -3)
+			// {
+			// 	bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				
+			// 	bc_vals[count + 0] = 0.0 - Lambda[1][i + j * nPoint];
+			// 	count += 1;
+			// 	continue;
+			// }
 			// else if (ctx->bc_flag[i] == -3)
 			// {
 			// 	bc_global_ids[count + 0] = i + 3 * nPoint + j * state_num * nPoint;				bc_vals[count + 0] = ctx->val_bc[3][i]-ctx->val_bc[3][i];
@@ -2227,16 +2210,15 @@ void TransportOpt2D::TangentMatSetup()
 	FormMatrixA31(M,K,P,Asubmat[6]);  // need debug
 	MatAssemblyBegin(Asubmat[6], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[6], MAT_FINAL_ASSEMBLY);
-
 	//! Stablization mat
-	MatAXPY(Asubmat[6], 1.0, Stable, DIFFERENT_NONZERO_PATTERN);
-	PetscObjectSetName((PetscObject) Stable, "MatStable");
-	DebugVisualizeMat(Stable, work_dir + "debug/Stable.m");
+	// MatAXPY(Asubmat[6], 1.0, Stable, DIFFERENT_NONZERO_PATTERN);
+	// PetscObjectSetName((PetscObject) Stable, "MatStable");
+	// DebugVisualizeMat(Stable, work_dir + "debug/Stable.m");
 
 	MatTranspose(Asubmat[6],MAT_INITIAL_MATRIX,&Asubmat[2]); //correct
 
 	// DebugVisualizeMat(Asubmat[2], work_dir + "debug/matA13.m");
-	DebugVisualizeMat(Asubmat[6], work_dir + "debug/matA31.m");
+	// DebugVisualizeMat(Asubmat[6], work_dir + "debug/matA31.m");
 
 	// A22  // No problem
 	FormMatrixA22(M,K,Asubmat[4]);  
@@ -2283,53 +2265,6 @@ void TransportOpt2D::TangentMatSetup()
 
 }
 
-void TransportOpt2D::PCMatSetup()
-{
-	PetscViewer viewer;
-    PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-
-	for (int i = 0; i < 9; i++)
-		MatConvert(Asubmat[i], MATMPIAIJ, MAT_INITIAL_MATRIX, &PCsubmat[i]);
-
-	// MatAXPY(S,-1.0,Kbb,MAT_SUBSET_NONZERO);
-	MatScale(PCsubmat[0], 1.0/dt);
-	MatZeroEntries(PCsubmat[1]);
-	MatZeroEntries(PCsubmat[2]);
-	MatZeroEntries(PCsubmat[3]);
-	MatZeroEntries(PCsubmat[5]);
-	MatZeroEntries(PCsubmat[6]);
-	MatZeroEntries(PCsubmat[7]);
-
-	Mat T;
-	MatDuplicate(Asubmat[2],  MAT_COPY_VALUES, &T);
-	MatLUFactor(Asubmat[0], NULL,NULL,NULL);
-	MatMatSolve(Asubmat[0],Asubmat[6],T);
-	MatMatMult(Asubmat[2],T,MAT_INITIAL_MATRIX,1.0,&PCsubmat[8]);
-	// MatMatMatMult(Asubmat[6],PCsubmat[0],Asubmat[2], MAT_INITIAL_MATRIX,PETSC_DEFAULT,&PCsubmat[8]);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/matA11.m",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(PCsubmat[0],viewer);
-
-	
-
-	MatCreateNest(PETSC_COMM_WORLD, 3, NULL, 3, NULL, PCsubmat, &PCMat_tmp);
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/PCMat_tmp.m",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(PCMat_tmp,viewer);
-
-	
-	MatConvert(PCMat_tmp, MATMPIAIJ, MAT_INITIAL_MATRIX,&PCMat);
-	// MatSetUp(PCMat);
-	PetscPrintf(PETSC_COMM_WORLD,  "PC Mat Convert Done!\n");
-	
-
-	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/PCMat.m",&viewer);
-    // ierr = PetscViewerPushFormat(viewer,format);
-    // ierr = MatView(PCMat,viewer);
-
-    PetscPrintf(PETSC_COMM_WORLD,  "finish PC Mat\n");
-}
-
 void TransportOpt2D::FormResVecb1(Vec x)
 {
 	Vec y_k, l_k, u_k;
@@ -2344,17 +2279,18 @@ void TransportOpt2D::FormResVecb1(Vec x)
 	VecDuplicate(Y_d, &vec_tmp1);
 	VecDuplicate(Y_d, &vec_tmp2);
 
-	VecWAXPY(vec_tmp0, -1.0, y_k, Y_d);		 //-(y_k - y_d)
-	MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = -A11 * (y_k-y_d)
-
-	MatMult(Asubmat[2], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
-	VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A11 * (y_k-y_d) - A13 * l_k
-
-	// VecWAXPY(vec_tmp0, -1.0, Y_k, Y_d); //-(y_k - y_d)
+	// ! Newton's method for nonlinear 
+	// VecWAXPY(vec_tmp0, -1.0, y_k, Y_d);		 //-(y_k - y_d)
 	// MatMult(Asubmat[0], vec_tmp0, vec_tmp1); //vec_tmp1 = -A11 * (y_k-y_d)
 
-	// MatMult(Asubmat[2], L_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	// MatMult(Asubmat[2], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
 	// VecWAXPY(bsub[0], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A11 * (y_k-y_d) - A13 * l_k
+
+	// ! Heat equation
+	MatMult(Asubmat[0], Y_d, bsub[0]); // * bsub[0] = A11 * y_d 
+
+
+
 	PetscObjectSetName((PetscObject) bsub[0], "bsub1");
 
 }
@@ -2373,11 +2309,15 @@ void TransportOpt2D::FormResVecb2(Vec x)
 	VecDuplicate(u_k, &vec_tmp1);
 	VecDuplicate(u_k, &vec_tmp2);
 
-	MatMult(Asubmat[4], u_k, vec_tmp1); //A22 * u_k
-	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A22 * u_k
+	// ! Newton's method for nonlinear 
+	// MatMult(Asubmat[4], u_k, vec_tmp1); //A22 * u_k
+	// VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A22 * u_k
 
-	MatMult(Asubmat[5], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
-	VecWAXPY(bsub[1], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
+	// MatMult(Asubmat[5], l_k, vec_tmp2); // vec_tmp2 = A13 * l_k
+	// VecWAXPY(bsub[1], -1.0, vec_tmp2, vec_tmp1); //vec_tmp1 - vec_tmp2 = -A22 * u_k - A23 * l_k
+
+	// ! Heat equation
+	VecSet(bsub[1], 0.0);
 	PetscObjectSetName((PetscObject) bsub[1], "bsub2");
 
 }
@@ -2398,16 +2338,21 @@ void TransportOpt2D::FormResVecb3(Vec x)
 	VecDuplicate(l_k, &vec_tmp3);
 	VecDuplicate(l_k, &bsub[2]);
 
-	MatMult(Asubmat[6], y_k, vec_tmp1); //A31 * y_k
-	VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A31 * y_k
+	// ! Newton's method for nonlinear 
+	// MatMult(Asubmat[6], y_k, vec_tmp1); //A31 * y_k
+	// VecScale(vec_tmp1, -1.0); // vec_tmp1 = -A31 * y_k
 
-	MatMult(Asubmat[7], u_k, vec_tmp2); //A32 * u_k
-	VecScale(vec_tmp2, -1.0); // vec_tmp2 = -A32 * u_k
+	// MatMult(Asubmat[7], u_k, vec_tmp2); //A32 * u_k
+	// VecScale(vec_tmp2, -1.0); // vec_tmp2 = -A32 * u_k
 
-	VecCopy(Res_nl, vec_tmp3);
-	// VecSet(vec_tmp3, 0.0);
-	VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
-	VecWAXPY(bsub[2], 1.0, vec_tmp3, vec_tmp0); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
+	// VecCopy(Res_nl, vec_tmp3);
+	// // VecSet(vec_tmp3, 0.0);
+	// VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
+	// VecWAXPY(bsub[2], 1.0, vec_tmp3, vec_tmp0); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
+
+	// ! Heat equation
+	VecSet(bsub[2], 0.0);
+
 	PetscObjectSetName((PetscObject) bsub[2], "bsub3");
 
 }
@@ -2426,7 +2371,12 @@ void TransportOpt2D::ResidualVecSetup(Vec x)
 	PetscInt low, high, ldim, iglobal, i, k;
 	PetscReal val, *array;
 	PetscInt shift[3] = {0, state_num * nTstep * nPoint, (state_num + ctrl_num) * nTstep * nPoint};
-
+	if (time_int == 0)
+	{
+		shift[0] = 0;
+		shift[1] = state_num * nPoint;
+		shift[2] = (state_num + ctrl_num) * nPoint;
+	}
 
 	// VecGetOwnershipRange(bsub[0], &low, &high);
 	// VecGetLocalSize(bsub[0], &ldim);
@@ -2472,7 +2422,6 @@ void TransportOpt2D::ResidualVecSetup(Vec x)
     // ierr = VecView(ResVec,viewer);
 
     PetscPrintf(PETSC_COMM_WORLD,  "finish Residual Vector\n");
-
 }
 
 void TransportOpt2D::DebugSubMat()
@@ -2499,176 +2448,10 @@ void TransportOpt2D::DebugSubMat()
 
 }
 
-// PetscErrorCode TransportOpt2D::FormFunction(SNES snes,Vec x,Vec f, void *dummy)
-// {
-// 	UserSetting2D *ctx = (UserSetting2D*) dummy;
-// 	ResidualVecSetup();
-// 	ApplyBoundaryCondition(ctx);	
-// 	VecDuplicate(ResVec, &f);
-// 	return 0;
-// }
-// PetscErrorCode TransportOpt2D::FormJacobian(SNES snes,Vec x,Mat jac,Mat B, void *dummy)
-// {
-// 	UserSetting2D *ctx = (UserSetting2D*) dummy;
-// 	TangentMatSetup();
-// 	ApplyBoundaryCondition(ctx);
-// 	MatDuplicate(TanMat,  MAT_COPY_VALUES, &jac);
-// 	return 0;
-// }
-
-// void TransportOpt2D::Run_SNES(const UserSetting2D *ctx)
-// {
-	
-// 	int n_iterator(1);
-// 	int l(0);
-// 	time_t t0, t1;	
-// 	vector<double> V_delta(3 * nPoint), P_delta(nPoint);
-	
-// 	InitializeProblem(ctx);
-
-// 	ReadBezierElementProcess(ctx -> work_dir);
-
-// 	// New SNES code
-// 	// for (l = 0; l<n_iterator; l++){
-
-// 	PetscPrintf(PETSC_COMM_WORLD, "Iteration Step: %d\n", l);
-// 	/*Build Linear System*/
-// 	PetscPrintf(PETSC_COMM_WORLD, "Building Linear System...\n");
-// 	MatZeroEntries(M);
-// 	MatZeroEntries(K);
-// 	MatZeroEntries(P[0]);
-// 	MatZeroEntries(P[1]);
-// 	VecSet(Res_nl, 0.0);
-
-// 	// VecSet(GR, 0);
-// 	t0 = time(NULL);
-// 	BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
-// 	// // VecAssemblyEnd(GR);
-// 	// PetscPrintf(PETSC_COMM_WORLD, "Done Vector Assembly...\n");
-// 	MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-// 	MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
-// 	MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
-// 	MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
-// 	VecAssemblyEnd(Res_nl);
-
-// 	// DebugVisualizeMat(M, work_dir + "debug/MMat.m");
-// 	// DebugVisualizeMat(K, work_dir + "debug/KMat.m");
-// 	// DebugVisualizeMat(P[0], work_dir + "debug/PxMat.m");
-// 	// DebugVisualizeMat(P[1], work_dir + "debug/PyMat.m");
-
-// 	PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly...\n");
-
-// 	TangentMatSetup();
-// 	ResidualVecSetup();
-// 	ApplyBoundaryCondition(ctx);
-
-// 	// DebugSubMat();
-// 	// DebugVisualizeMat(PCMat,  work_dir + "debug/PCMat.m");
-// 	// DebugVisualizeMat(TanMat, work_dir + "debug/TanMat_afterBC.m");
-// 	// DebugVisualizeVec(ResVec, work_dir + "debug/ResVec_afterBC.m");
-
-// 	t1 = time(NULL);
-// 	PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);
-// 	MPI_Barrier(comm);
-// 	PetscPrintf(PETSC_COMM_WORLD, "Solving...\n");
-
-// 	t0 = time(NULL);
-
-// 	SNESCreate(PETSC_COMM_WORLD,&snes);
-// 	SNESSetFunction(snes,ResVec,FormFunction, ctx);
-// 	SNESSetFromOptions(snes);
-// 	// SNESMonitorSet(snes,Monitor,&user,0);
-// 	SNESSolve(snes,NULL,U);
-// 	SNESGetIterationNumber(snes,&its);
-// 	SNESDestroy(&snes);
-
-// 	/*Petsc KSP solver setting*/
-// 	KSPCreate(PETSC_COMM_WORLD, &ksp);
-// 	// KSPSetOperators(ksp, TanMat, TanMat);
-// 	KSPSetOperators(ksp, TanMat, TanMat);
-
-// 	KSPSetFromOptions(ksp);
-// 	// KSPSetOperators(ksp, TanMat_tmp, TanMat_tmp);
-// 	{
-// 		IS isg[2];
-// 		KSP *subksp;
-
-// 		KSPGetPC(ksp, &pc);
-
-// 		ISCreateStride(PETSC_COMM_WORLD, (state_num + ctrl_num) * nPoint * nTstep, 0, 1, &isg[0]);
-// 		ISCreateStride(PETSC_COMM_WORLD, state_num * nPoint * nTstep, (state_num + ctrl_num) * nPoint * nTstep, 1, &isg[1]);
-
-// 		// PCSetType(pc,PCFIELDSPLIT);
-// 		PCFieldSplitSetIS(pc, "0", isg[0]);
-// 		PCFieldSplitSetIS(pc, "1", isg[1]);
-// 	}
-
-// 	/*Solving the equation*/
-
-// 	KSPSolve(ksp, ResVec, dX);
-
-// 	KSPView(ksp, PETSC_VIEWER_STDOUT_WORLD);
-// 	PetscPrintf(PETSC_COMM_WORLD, "------------------------------\n");
-// 	PetscInt its;
-// 	KSPGetIterationNumber(ksp, &its);
-// 	PetscPrintf(PETSC_COMM_WORLD, "iterations %d\n", its);
-// 	KSPConvergedReason reason;
-// 	KSPGetConvergedReason(ksp, &reason);
-// 	PetscPrintf(PETSC_COMM_WORLD, "KSPConvergedReason: %D\n", reason);
-// 	t1 = time(NULL);
-// 	PetscPrintf(PETSC_COMM_WORLD, "Done Solving with time: %d \n", t1 - t0);
-
-// 	// PetscViewer viewer;
-// 	// PetscViewerFormat format =  PETSC_VIEWER_ASCII_MATLAB;
-
-// 	DebugVisualizeVec(dX, work_dir + "debug/dX.m");
-// 	// ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, work_dir + "debug/dX.m",&viewer);
-// 	// ierr = PetscViewerPushFormat(viewer,format);
-// 	// ierr = VecView(dX,viewer);
-
-// 	//ierr = VecAXPY(Y_k, 1.0, dX);
-
-// 	/*Collect the solution from all processors*/
-// 	// Vec dX_seq;
-// 	// VecScatter scatter_ctx;
-// 	// PetscReal    *_a;
-// 	// VecScatterCreateToAll(dX, &scatter_ctx, &dX_seq);
-// 	// VecScatterBegin(scatter_ctx, dX, dX_seq, INSERT_VALUES, SCATTER_FORWARD);
-// 	// VecScatterEnd(scatter_ctx, dX, dX_seq, INSERT_VALUES, SCATTER_FORWARD);
-// 	// VecGetArray(dX_seq, &_a);
-// 	// MPI_Barrier(comm);
-
-// 	// for (uint i = 0; i < cpts.size(); i++){
-// 	// 	V_delta[3 * i] = PetscRealPart(_a[4 * i]);
-// 	// 	V_delta[3 * i + 1] = PetscRealPart(_a[4 * i + 1]);
-// 	// 	V_delta[3 * i + 2] = PetscRealPart(_a[4 * i + 2]);
-// 	// 	P_delta[i] = PetscRealPart(_a[4 * i + 3]);
-// 	// }
-// 	// VecRestoreArray(dX_seq, &_a);
-// 	// VecScatterDestroy(&ctx);
-// 	// VecDestroy(&dX_seq);
-
-// 	// for (uint i = 0; i < cpts.size(); i++){
-// 	// 	Vel[3 * i] += V_delta[3 * i];
-// 	// 	Vel[3 * i + 1] += V_delta[3 * i + 1];
-// 	// 	Vel[3 * i + 2] += V_delta[3 * i + 2];
-// 	// 	Pre[i] += P_delta[i];
-// 	// }
-// 	// MPI_Barrier(comm);
-// 	// /*Visualize the result*/
-// 	// if (comRank == 0){
-// 	// 	cout << "Visualizing...\n";
-// 	// 	VisualizeVTK_ControlMesh(cpts, tmesh, l, fn);
-// 	// }
-// 	// MPI_Barrier(comm);
-// 	// VisualizeVTK_PhysicalDomain(l, fn + "final_physics");
-// 	// }
-// }
-
 void TransportOpt2D::Run(const UserSetting2D *ctx)
 {
 	
-	int n_iterator(20);
+	int n_iterator(1);
 	double tol(1e-7);
 	int l(0);
 	time_t t0, t1;	
@@ -2680,25 +2463,23 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 
 	ReadBezierElementProcess(ctx -> work_dir);
 
-	// PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");	
-	// t0 = time(NULL);
+	PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");	
+	t0 = time(NULL);
 
-	// MatZeroEntries(M);
-	// MatZeroEntries(K);
-	// MatZeroEntries(P[0]);
-	// MatZeroEntries(P[1]);
-	// MatZeroEntries(Stable);
+	MatZeroEntries(M);
+	MatZeroEntries(K);
+	MatZeroEntries(P[0]);
+	MatZeroEntries(P[1]);
 
-	// BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
+	BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 
-	// MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-	// MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
-	// MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
-	// MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
-	// MatAssemblyEnd(Stable, MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 
-	// t1 = time(NULL);
-	// PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
+	t1 = time(NULL);
+	PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
 
 	// PetscPrintf(PETSC_COMM_WORLD, "Building Linear System...\n");
 	// t0 = time(NULL);
@@ -2726,25 +2507,25 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
 		// MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 
-		PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");
-		t0 = time(NULL);
+		// PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");
+		// t0 = time(NULL);
 
-		MatZeroEntries(M);
-		MatZeroEntries(K);
-		MatZeroEntries(P[0]);
-		MatZeroEntries(P[1]);
-		MatZeroEntries(Stable);
+		// MatZeroEntries(M);
+		// MatZeroEntries(K);
+		// MatZeroEntries(P[0]);
+		// MatZeroEntries(P[1]);
+		// MatZeroEntries(Stable);
 
-		BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
+		// BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 
-		MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
-		MatAssemblyEnd(Stable, MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
+		// MatAssemblyEnd(Stable, MAT_FINAL_ASSEMBLY);
 
-		t1 = time(NULL);
-		PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
+		// t1 = time(NULL);
+		// PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
 
 		PetscPrintf(PETSC_COMM_WORLD, "Building Linear System...\n");
 		t0 = time(NULL);
@@ -2766,8 +2547,8 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 
 		ResidualVecSetup(X);
 		//! Apply BC:Modify for stabilization method
-		// ApplyBoundaryCondition(ctx, l);
-		ApplyBoundaryCondition(ctx, 0);
+		ApplyBoundaryCondition(ctx, l);
+		// ApplyBoundaryCondition(ctx, 0);
 
 		// DebugSubMat();
 		// DebugVisualizeMat(PCMat,  work_dir + "debug/PCMat.m");
@@ -2828,7 +2609,8 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		PetscPrintf(PETSC_COMM_WORLD, "Visualizing...\n");
 		for(int i = 0; i < nTstep; i++)
 		{
-			VisualizeVTK_ControlMesh_Burger(ctx->pts, ctx->mesh, i, l, work_dir + "test1/");
+			// VisualizeVTK_ControlMesh_Burger(ctx->pts, ctx->mesh, i, l, work_dir + "test1/");
+			VisualizeVTK_ControlMesh_Heat(ctx->pts, ctx->mesh, i, l, work_dir + "test1/");
 			VisualizeVTK_PhysicalDomain(i, l, work_dir + "test1/");
 		}
 
@@ -2913,6 +2695,179 @@ void TransportOpt2D::CollectAndUpdateResult(Vec dx, Vec x)
 	// }
 }
 
+void TransportOpt2D::VisualizeVTK_ControlMesh_Heat(const vector<Vertex2D>& spt, const vector<Element2D>& mesh, int time, int step, string fn)
+{
+	stringstream ss;
+	ss << step << "_" << time;
+	
+	string fname = fn + "Result_CM_"+ss.str()+".vtk";
+	// string fname = fn + "controlmesh_VelocityPressure.vtk";
+	ofstream fout;
+	fout.open(fname.c_str());
+	unsigned int i;
+	if (fout.is_open())
+	{
+		fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+		fout << "POINTS " << spt.size() << " float\n";
+		for (i = 0; i<spt.size(); i++)
+		{
+			fout << std::setprecision(9) << spt[i].coor[0]<< std::fixed << " "<< std::setprecision(9) <<spt[i].coor[1]<< std::fixed << " "<< std::setprecision(9) << 0 << std::fixed << "\n";
+		}
+		fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+		}
+		fout << "\nCELL_TYPES " << mesh.size() << "\n";
+		for (i = 0; i<mesh.size(); i++)
+		{
+			fout << "9\n";
+		}
+		fout << "POINT_DATA " << spt.size() << "\n";
+		fout << "VECTORS y float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9)<< 0 << " "<< std::setprecision(9) << 0 << " " << State[0][i + time * nPoint] << "\n";
+		fout << "VECTORS u float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout<< std::setprecision(9) << 0 << " " << std::setprecision(9)<< 0 << " " << Ctrl[0][i+ time * nPoint] << "\n";
+		fout << "VECTORS lamda float\n";
+		for (i = 0; i < spt.size(); i++)
+			fout << std::setprecision(9)<< 0 << " " << std::setprecision(9)<< 0 << " " << Lambda[0][i+ time * nPoint] << "\n";
+		fout.close();
+	}
+	else
+	{
+		cout << "Cannot open " << fname << "!\n";
+	}
+
+	// fname = fn + "Result_CM_y_"+ss.str()+".vtk";
+	// fout.open(fname.c_str());
+	// if (fout.is_open())
+	// {
+	// 	fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+	// 	fout << "POINTS " << spt.size() << " float\n";
+	// 	for (i = 0; i<spt.size(); i++)
+	// 	{
+	// 		fout << std::setprecision(9) << spt[i].coor[0]<< std::fixed << " "<< std::setprecision(9) <<spt[i].coor[1]<< std::fixed << " "<< std::setprecision(9) << State[0][i + time * nPoint]<< std::fixed << "\n";
+	// 	}
+	// 	fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+	// 	}
+	// 	fout << "\nCELL_TYPES " << mesh.size() << "\n";
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "9\n";
+	// 	}
+	// 	fout << "POINT_DATA " << spt.size() << "\n";
+	// 	fout << "VECTORS y float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS u float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS lamda float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout.close();
+	// }
+	// else
+	// {
+	// 	cout << "Cannot open " << fname << "!\n";
+	// }
+
+	// fname = fn + "Result_CM_u_"+ss.str()+".vtk";
+	// fout.open(fname.c_str());
+	// if (fout.is_open())
+	// {
+	// 	fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+	// 	fout << "POINTS " << spt.size() << " float\n";
+	// 	for (i = 0; i<spt.size(); i++)
+	// 	{
+	// 		fout << std::setprecision(9) << spt[i].coor[0]<< std::fixed << " "<< std::setprecision(9) <<spt[i].coor[1]<< std::fixed << " "<< std::setprecision(9) << Ctrl[0][i+ time * nPoint]<< std::fixed << "\n";
+	// 	}
+	// 	fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+	// 	}
+	// 	fout << "\nCELL_TYPES " << mesh.size() << "\n";
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "9\n";
+	// 	}
+	// 	fout << "POINT_DATA " << spt.size() << "\n";
+	// 	fout << "VECTORS y float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS u float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS lamda float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout.close();
+	// }
+	// else
+	// {
+	// 	cout << "Cannot open " << fname << "!\n";
+	// }
+
+	// fname = fn + "Result_CM_l_"+ss.str()+".vtk";
+	// fout.open(fname.c_str());
+	// if (fout.is_open())
+	// {
+	// 	fout << "# vtk DataFile Version 2.0\nSquare plate test\nASCII\nDATASET UNSTRUCTURED_GRID\n";
+	// 	fout << "POINTS " << spt.size() << " float\n";
+	// 	for (i = 0; i<spt.size(); i++)
+	// 	{
+	// 		fout << std::setprecision(9) << spt[i].coor[0]<< std::fixed << " "<< std::setprecision(9) <<spt[i].coor[1]<< std::fixed << " "<< std::setprecision(9) << Lambda[0][i+ time * nPoint]<< std::fixed << "\n";
+	// 	}
+	// 	fout << "\nCELLS " << mesh.size() << " " << 5 * mesh.size() << '\n';
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "4 " << mesh[i].IEN[0] << " " << mesh[i].IEN[1] << " " << mesh[i].IEN[2] << " " << mesh[i].IEN[3] << '\n';
+	// 	}
+	// 	fout << "\nCELL_TYPES " << mesh.size() << "\n";
+	// 	for (i = 0; i<mesh.size(); i++)
+	// 	{
+	// 		fout << "9\n";
+	// 	}
+	// 	fout << "POINT_DATA " << spt.size() << "\n";
+	// 	fout << "VECTORS y float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS u float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout << "VECTORS lamda float\n";
+	// 	for (i = 0; i < spt.size(); i++)
+	// 		fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
+	// 	fout.close();
+	// }
+	// else
+	// {
+	// 	cout << "Cannot open " << fname << "!\n";
+	// }
+
+	// string fname1 = fn + "velocityfield.txt";
+	// ofstream fout1;
+	// fout1.open(fname1.c_str());
+	// if (fout1.is_open())
+	// {
+	// 	for (uint i = 0; i<Vel.size() / 3; i++)
+	// 	{
+	// 		fout1 << Vel[i * 3] << " " << Vel[i * 3 + 1] << " " << Vel[i * 3 + 2] << "\n";
+	// 	}
+	// 	fout1.close();
+	// }
+	// else
+	// {
+	// 	cout << "Cannot open " << fname1 << "!\n";
+	// }
+}
+
 void TransportOpt2D::VisualizeVTK_ControlMesh_Burger(const vector<Vertex2D>& spt, const vector<Element2D>& mesh, int time, int step, string fn)
 {
 	stringstream ss;
@@ -2944,13 +2899,13 @@ void TransportOpt2D::VisualizeVTK_ControlMesh_Burger(const vector<Vertex2D>& spt
 		fout << "POINT_DATA " << spt.size() << "\n";
 		fout << "VECTORS y float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << State[1][i+ time * nPoint] << " " << 0 << "\n";
+			fout << std::setprecision(9)<< State[0][i + time * nPoint] << " "<< std::setprecision(9) << 0 << " " << 0 << "\n";
 		fout << "VECTORS u float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< Ctrl[1][i+ time * nPoint] << " " << 0 << "\n";
+			fout<< std::setprecision(9) << Ctrl[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
 		fout << "VECTORS lamda float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< Lambda[1][i+ time * nPoint] << " " << 0 << "\n";
+			fout << std::setprecision(9)<< Lambda[0][i+ time * nPoint] << " " << std::setprecision(9)<< 0 << " " << 0 << "\n";
 		fout.close();
 	}
 	else
@@ -3218,13 +3173,13 @@ void TransportOpt2D::WriteVTK(const vector<array<double, 3>> spt, const vector<d
 		fout << "POINT_DATA " << sdisp.size() / result_num << "\n";
 		fout << "VECTORS y float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout << std::setprecision(9) << sdisp[i*result_num+0]<< std::fixed << " " << std::setprecision(9) << sdisp[i*result_num+1] << std::fixed<< " " << 0 << "\n";
+			fout << std::setprecision(9) << sdisp[i*result_num+0]<< std::fixed << " " << 0 << std::fixed<< " " << 0 << "\n";
 		fout << "VECTORS u float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout << std::setprecision(9) << sdisp[i*result_num+2] << std::fixed<< " " << std::setprecision(9) << sdisp[i*result_num+3] << std::fixed<< " " << 0 << "\n";
+			fout << std::setprecision(9) << sdisp[i*result_num+1] << std::fixed<< " " << 0 << std::fixed<< " " << 0 << "\n";
 		fout << "VECTORS lambda float\n";
 		for (i = 0; i < spt.size(); i++)
-			fout << std::setprecision(9) << sdisp[i*result_num+4]<< std::fixed << " " << std::setprecision(9) << sdisp[i*result_num+5] << std::fixed<< " " << 0 << "\n";
+			fout << std::setprecision(9) << sdisp[i*result_num+2]<< std::fixed << " " << 0 << std::fixed<< " " << 0 << "\n";
 
 
 		// for (uint i = 0; i<sdisp.size() / 4; i++)

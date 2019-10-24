@@ -15,16 +15,16 @@ using namespace std;
 
 const int degree = 3;
 // * Burger's equation
-const int state_num = 2;
-const int ctrl_num = 2;
-const int result_num = 6;
+// const int state_num = 2;
+// const int ctrl_num = 2;
+// const int result_num = 6;
 // * Diffusion equation
-// const int state_num = 1;
-// const int ctrl_num = 1;
-// const int result_num = 3;
+const int state_num = 1;
+const int ctrl_num = 1;
+const int result_num = 3;
 
 const int bzpt_num = 16;
-
+const int time_int = 1; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
 
 class TransportOpt2D
 {
@@ -181,6 +181,7 @@ private:
 	void VisualizeVTK_PhysicalDomain(int time, int step, string fn);
 	void VisualizeVTK_ControlMesh(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int step, string fn);
 	void VisualizeVTK_ControlMesh_Burger(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int time, int step, string fn);
+	void VisualizeVTK_ControlMesh_Heat(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int time, int step, string fn);
 
 	//void ResultCal_Bezier(double u, double v, const Element2D& bzel, double pt[3], double result[4], double dudx[3], double& detJ);
 
