@@ -1,6 +1,6 @@
 #PETSC_DIR=/mnt/c/Users/LAR/Documents/GroupCode/lib/petsc
-# PETSC_DIR=~/Documents/petsc
-PETSC_DIR=/pylon5/eg560mp/angranl/lib/petsc
+PETSC_DIR=~/Documents/lib/petsc
+#PETSC_DIR=/pylon5/eg560mp/angranl/lib/petsc
 
 # CLFAGS          =
 # FFLAGS	        =
@@ -18,11 +18,12 @@ include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
 include ${PETSC_DIR}/lib/petsc/conf/test
 
-Compiler=mpiicpc
+#Compiler=mpiicpc
+Compiler=g++
 # Compiler=pgcc
 # Compiler=mpiicc
 # CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX} -Wall
-CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX}  -std=c++11 -qopenmp -Wall
+CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX}  -std=c++11 -fopenmp -Wall
 #-D_GLIBCXX_USE_CXX11_ABI=0
 
 all: neuron_opt

@@ -267,8 +267,8 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 				}
 			}
 
-			val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
-			val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
+			// val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
+			// val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
 		}
 		TXTWriteDesire(fn_in);
 	}

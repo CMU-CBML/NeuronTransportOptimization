@@ -4,7 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/pylon5/eg560mp/angranl/lib/petsc/**"
+                "/pylon5/eg560mp/angranl/lib/petsc/**",
+                "/home/lar/Documents/lib/petsc/**"
             ],
             "defines": [],
             "compilerPath": "/usr/lib64/ccache/clang",
