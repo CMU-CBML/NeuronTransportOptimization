@@ -144,15 +144,79 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		/// For one pipe
 		double eps(1e-6);
 		int count(0);
+		// ! Diffusion test
+		// for (i = 0; i < pts.size(); i++)
+		// {
+		// 	if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
+		// 	{
+		// 		/// Concentration
+		// 		val_bc[0][i] = 0.0;
+		// 		bc_flag[i] = -1;
+		// 		continue;
+		// 	}
+		// 	// if (abs(pts[i].coor[0] - 0.0) < eps)
+		// 	// {
+		// 	// 	/// Concentration
+		// 	// 	val_bc[0][i] = 0.0;
+		// 	// 	bc_flag[i] = -1;
+		// 	// 	continue;
+		// 	// }
+		// 	// else if (abs(pts[i].coor[0] - 1.0) < eps)
+		// 	// {
+		// 	// 	/// Concentration
+		// 	// 	val_bc[0][i] = 0.0;
+		// 	// 	bc_flag[i] = -2;
+		// 	// 	continue;
+		// 	// }
+		// 	// else if (abs(pts[i].coor[1] - 0.0) < eps)
+		// 	// {
+		// 	// 	val_bc[0][i] = 0.0;
+		// 	// 	bc_flag[i] = -3;
+		// 	// 	continue;
+		// 	// }
+		// 	// else if (abs(pts[i].coor[1] - 1.0) < eps)
+		// 	// {
+		// 	// 	val_bc[0][i] = 0.0;
+		// 	// 	bc_flag[i] = -4;
+		// 	// 	continue;
+		// 	// }
+		// 	// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+		// 	// {
+		// 	// 	/// Concentration
+		// 	// 	//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
+		// 	// 	/// v+
+		// 	// 	val_bc[3][i] = 0.0;
+		// 	// 	val_bc[4][i] = 0.0;
+		// 	// 	/// v-
+		// 	// 	val_bc[5][i] = 0.0;
+		// 	// 	val_bc[6][i] = 0.0;
+		// 	// 	bc_flag[i] = -3;
+		// 	// 	continue;
+		// 	// }
+		// 	bc_flag[i] = count;
+		// 	count++;
+		// }
+		// ! Convection test
 		for (i = 0; i < pts.size(); i++)
 		{
 			if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
 			{
-				/// Concentration
-				val_bc[0][i] = 0.0;
-				bc_flag[i] = -1;
-				continue;
+				if (abs(pts[i].coor[1] - 1.0) < eps || ((pts[i].coor[1] > 0.5) && (pts[i].coor[1] < 1.0) && abs(pts[i].coor[0] - 0.0) < eps))
+				{
+					/// Concentration
+					val_bc[0][i] = 1.0;
+					bc_flag[i] = -1;
+					continue;
+				}
+				else
+				{
+					val_bc[0][i] = 0.0;
+					bc_flag[i] = -1;
+					continue;
+				}
 			}
+			
+			
 			// if (abs(pts[i].coor[0] - 0.0) < eps)
 			// {
 			// 	/// Concentration
@@ -267,8 +331,27 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 				}
 			}
 
-			// val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
+			if((pts[i].coor[0] >=  0 & pts[i].coor[0] <= 0.5) && (pts[i].coor[1] >=  0 & pts[i].coor[1] <= 0.5))
+			{
+				val_desire[0][i] = 1.0;
+			}
+			else
+			{
+				for(j = 0;j<STATE_NUM;j++)
+				{
+					val_desire[j][i] = 0.0;
+				}
+			}
+
+
+			//val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
 			// val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
+
+			for(j = 0;j<STATE_NUM;j++)
+			{
+				val_desire[j][i] = 0.0;
+			}
+
 		}
 		TXTWriteDesire(fn_in);
 	}

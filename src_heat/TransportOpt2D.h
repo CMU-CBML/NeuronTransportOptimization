@@ -18,13 +18,13 @@ const int degree = 3;
 // const int state_num = 2;
 // const int ctrl_num = 2;
 // const int result_num = 6;
-// * Diffusion equation
+// * Diffusion equation and Convection-diffusion equation
 const int state_num = 1;
 const int ctrl_num = 1;
 const int result_num = 3;
 
 const int bzpt_num = 16;
-const int time_int = 1; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
+const int time_int = 0; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
 
 class TransportOpt2D
 {
@@ -70,18 +70,14 @@ private:
 	double beta1, beta2;
 
 	// state variables
-	vector<double> n0, n_plus, n_minus;
-	vector<double> Vel_plus[dim], Vel_minus[dim];
 	vector<double> State[state_num];
 	// control variables
-	vector<double> f_plus[dim], f_minus[dim];
 	vector<double> Ctrl[ctrl_num];
 	// penalty variables
-	vector<double> lambda[1 * dim];
 	vector<double> Lambda[state_num];
 
 	// Unit Np * Np Matrix
-	Mat M, K, P[dim], Stable;
+	Mat M, K, P[dim], Conv, Stable;
 	
 	// KKT system matrix and vector
 	Mat Asubmat[9];
@@ -129,6 +125,7 @@ private:
 
 	void ComputeMassMatrix(vector<double>& Nx, const double detJ, vector<vector<double>>& MassMat);
 	void ComputeStiffMatrix(vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& StiffMat);
+	void ComputeConvectMatrix(vector<double>& v, vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& ConvectMat);
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
 
 	void L2Projection(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, double detJ, vector<double>& Proj);
