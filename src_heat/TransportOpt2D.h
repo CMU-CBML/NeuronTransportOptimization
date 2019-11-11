@@ -117,6 +117,7 @@ private:
 	void GaussInfo(int ng);	
 	void InitializeProblem(const UserSetting2D *ctx);
 	void BasisFunction(double u, double v, int nen, const vector<array<double, dim>>& pt, const vector<array<double, bzpt_num>> &cmat, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, double dudx[dim][dim], double& detJ);
+	void BasisFunctionCoarseSpace(double u, double v, int nen, const vector<array<double, dim>>& pt, const vector<array<double, bzpt_num>> &cmat, vector<double> &Nx, vector<array<double, dim>> &dNdx, double& detJ);
 
 	// void BasisFunction(double u, double v, double w, int nen, const vector<array<double, 3>>& pt, const vector<array<double, 64>> &cmat, vector<double> &Nx, vector<array<double, 3>> &dNdx, vector<array<array<double, 3>, 3>> &dN2dx2, double dudx[3][3], double& detJ);
 	void PointFormValue(vector<double> &Nx, const vector<double> &U, double Value);
@@ -129,8 +130,13 @@ private:
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
 
 	void L2Projection(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, double detJ, vector<double>& Proj);
+	void L2Projection_Convection(const vector<double> w, vector<double> &Nx, vector<array<double, dim>> &dNdx, const vector<int> &IEN, double detJ, vector<double> &Proj);
+	void LocalL2Projection(int e, vector<double> w, vector<vector<double>> &u_proj);
 
-	void ComputeStableMatrix(const vector<double> val_ini[state_num], double h, vector<double> wdNdx_proj, vector<double>& Nx, vector<array<double, dim>>& dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, const double detJ, const vector<int>& IEN, vector<vector<double>>& StableMat);
+	void ComputeStableMatrix(const vector<double> val_ini[state_num], double h, vector<double> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, const double detJ, const vector<int> &IEN, vector<vector<double>> &StableMat);
+	void ComputeStableMatrix_Convection(const vector<double> w, double h, vector<double> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, const double detJ, const vector<int> &IEN, vector<vector<double>> &StableMat);
+	void ComputeStableMatrix_Convection2(const vector<double> w, double h, vector<vector<double>> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<double> &Nx_disc, vector<array<double, dim>> &dNdx_disc, const double detJ, const double detJ_disc, const vector<int> &IEN, vector<vector<double>> &StableMat);
+
 	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
 	void ComputeResVector(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ, vector<double> &qtmp);
 

@@ -352,7 +352,7 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			if (ctx->bc_flag[i] == -1)
 			{
 				// Lambda[0][i+j*nPoint] = ctx->val_bc[0][i];
-				Lambda[1][i+j*nPoint] = 0.0;
+				Lambda[0][i+j*nPoint] = 0.0;
 				continue;
 			}
 			// else if (ctx->bc_flag[i] == -2)
@@ -688,6 +688,72 @@ void TransportOpt2D::BasisFunction(double u, double v, int nen, const vector<arr
 	}
 }
 
+void TransportOpt2D::BasisFunctionCoarseSpace(double u, double v, int nen, const vector<array<double, dim>> &pt, const vector<array<double, bzpt_num>> &cmat, vector<double> &Nx, vector<array<double, dim>> &dNdx, double &detJ)
+{
+	double Nu[2] = {(1. - u), u};
+	double Nv[2] = {(1. - v), v};
+
+	double dNdu[2] = {-1., 1.};
+	double dNdv[2] = {-1., 1.};
+
+	double dNdt[4][dim];
+
+
+
+	Nx.clear();
+	dNdx.clear();
+	Nx.resize(nen, 0);
+	dNdx.resize(nen, {0});
+
+	int i, j, k, a, b, c, loc;
+	loc = 0;
+
+	for (k = 0; k < 2; k++)
+	{
+		Nx[loc] = Nu[k] * Nv[0];
+		dNdt[loc][0] = dNdu[k] * Nv[0];
+		dNdt[loc][1] = Nu[k] * dNdv[0];
+		loc++;
+	}
+	for (k = 0; k < 2; k++)
+	{
+		Nx[loc] = Nu[1-k] * Nv[1];
+		dNdt[loc][0] = dNdu[1-k] * Nv[1];
+		dNdt[loc][1] = Nu[1-k] * dNdv[1];
+		loc++;
+	}
+
+	double dxdt[2][2] = {{0}};
+	int id_linear[4] = {0, 3, 15, 12};
+	for (loc = 0; loc < 4; loc++)
+		for (a = 0; a < 2; a++)
+			for (b = 0; b < 2; b++)
+				dxdt[a][b] += pt[id_linear[loc]][a] * dNdt[loc][b];
+
+	// for (loc = 0; loc < 4;loc++)
+	// {
+	// 	cout << "dNdt: " << loc << " " << dNdt[loc][0] << " " << dNdt[loc][1] << "\n";
+	// 	cout << "pt: " << loc << " " << pt[id_linear[loc]][0] << " " << pt[id_linear[loc]][1] << "\n";
+	// }
+
+	// for (a = 0; a < 2; a++)
+	// 	for (b = 0; b < 2; b++)
+	// 		cout << "dxdt[a][b]" << dxdt[a][b] << "\n";
+
+	double dtdx[2][2] = {{0}};
+	Matrix2DInverse(dxdt, dtdx);
+
+	//1st derivatives
+	for (i = 0; i < 4; i++)
+	{
+		dNdx[i][0] = dNdt[i][0] * dtdx[0][0] + dNdt[i][1] * dtdx[1][0];
+		dNdx[i][1] = dNdt[i][0] * dtdx[0][1] + dNdt[i][1] * dtdx[1][1];
+	}
+
+	detJ = MatrixDet(dxdt);
+	detJ = 0.25 * detJ;
+}
+
 // For 3D
 /* void TransportOpt2D::BasisFunction(double u, double v, double w, int nen, const vector<array<double, 3>>& pt, const vector<array<double, 64>> &cmat, vector<double> &Nx, vector<array<double, 3>> &dNdx, vector<array<array<double, 3>, 3>> &dN2dx2, double dudx[3][3], double& detJ)
 {
@@ -989,6 +1055,160 @@ void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, d
 			ParMat[a][b] += Nx[a] * dNdx[b][dir] * detJ;
 }
 
+void TransportOpt2D::LocalL2Projection(int e, vector<double> w, vector<vector<double>> &u_proj)
+{
+	int nen, A;
+	nen = bzmesh_process[e].IEN.size();
+	int ne_disc = 4;
+
+	u_proj.clear();
+	u_proj.resize(nen);
+	for (int i = 0; i < nen; i++)
+	{
+		u_proj[i].resize(ne_disc);
+	}
+
+	// * Fine space
+	double dudx[dim][dim];
+	double detJ;
+	vector<double> Nx;
+	vector<array<double, 2>> dNdx;
+	vector<array<array<double, 2>, 2>> dN2dx2;
+
+	// * Coarse discontinuous space
+
+	double detJ_disc, detJ_all(0.0);
+	vector<double> Nx_disc;
+	vector<array<double, 2>> dNdx_disc;
+
+	vector<vector<double>> Mtmp;
+	vector<double> Rhstmp;
+	Mat EM;
+	Vec Uproj, ERhs;
+
+	MatCreate(PETSC_COMM_WORLD, &EM);
+	MatSetSizes(EM, PETSC_DECIDE, PETSC_DECIDE, ne_disc, ne_disc);
+	MatSetType(EM, MATAIJ);
+	MatSetUp(EM);
+
+	VecCreate(PETSC_COMM_WORLD, &ERhs);
+	VecSetSizes(ERhs, PETSC_DECIDE, ne_disc);
+	VecSetUp(ERhs);
+	VecDuplicate(ERhs, &Uproj);
+
+	// * Initialize all variables 
+
+	Nx.clear();
+	Nx.resize(nen, 0);
+	dNdx.clear();
+	dNdx.resize(nen, {0});
+	dN2dx2.clear();
+	dN2dx2.resize(nen, {{0}});
+
+	Nx_disc.clear();
+	Nx_disc.resize(ne_disc, 0);
+	dNdx_disc.clear();
+	dNdx_disc.resize(ne_disc, {0});
+
+	for (int idx = 0; idx < nen;idx++)
+	{
+		// cout << "idx: " << idx << "\n";
+		Mtmp.clear();
+		Mtmp.resize(ne_disc);
+		Rhstmp.clear();
+		Rhstmp.resize(ne_disc, 0.0);
+
+		for (int i = 0; i < ne_disc; i++)
+		{
+			Mtmp[i].resize(ne_disc, 0.);
+		}
+
+		// cout << "idx: " << idx << "\n";
+		for (int i = 0; i < Gpt.size(); i++)
+		{
+			for (int j = 0; j < Gpt.size(); j++)
+			{
+				// * Compute Matrix
+				BasisFunctionCoarseSpace(Gpt[i], Gpt[j], 4, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx_disc, dNdx_disc, detJ_disc);
+				detJ_disc = wght[i] * wght[j] * detJ_disc;
+				ComputeMassMatrix(Nx_disc, detJ_disc, Mtmp);
+				// cout << "detJ_disc " << detJ_disc << "\n";
+				// for (int ii = 0; ii < 4; ii++)
+				// {
+				// 	cout << "Nx_disc " << ii << ": " << Nx_disc[ii] << "\n";
+				// 	cout << "dNdx_disc " << ii << ": " << dNdx_disc[ii][0] << " " << dNdx_disc[ii][1] << "\n";
+				// }
+
+				// * Compute Rhs Vec
+				double utmp = 0.0;
+				BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
+				detJ = wght[i] * wght[j] * detJ;
+
+				utmp = w[0] * dNdx[idx][0] + w[1] * dNdx[idx][1];
+
+				for (int k = 0; k < ne_disc; k++)
+				{
+					Rhstmp[k] += Nx_disc[k] * utmp * detJ_disc;
+				}
+			}
+		}
+
+		for (int i = 0; i < ne_disc; i++)
+		{
+			for (int j = 0; j < ne_disc; j++)
+			{
+				MatSetValue(EM, i, j, Mtmp[i][j], INSERT_VALUES);
+			}
+			VecSetValue(ERhs, i, Rhstmp[i], INSERT_VALUES);
+		}
+		MatAssemblyBegin(EM, MAT_FINAL_ASSEMBLY);
+		MatAssemblyEnd(EM, MAT_FINAL_ASSEMBLY);
+		VecAssemblyBegin(ERhs);
+		VecAssemblyEnd(ERhs);
+
+		KSP ksp_e;
+		KSPCreate(PETSC_COMM_WORLD, &ksp_e);
+		KSPSetOperators(ksp_e, EM, EM);
+		KSPSolve(ksp_e, ERhs, Uproj);
+
+		PetscReal *Uproj_array;
+		VecGetArray(Uproj,&Uproj_array);
+		// cout << "LocalL2Result:\n";
+
+		// // DebugVisualizeMat(EM, work_dir + "debug/EM.m");
+		// // DebugVisualizeVec(ERhs, work_dir + "debug/ERhs.m");
+
+		// // cout << "U:" << u[idx] << "\n";
+		// for (int i = 0; i < ne_disc; i++)
+		// {
+		// 	u_proj[idx][i] = Uproj_array[i];
+
+		// 	cout << i << " :" <<Uproj_array[i] <<"\n";
+		// }
+		VecRestoreArray(Uproj, &Uproj_array);
+	}
+
+	MatDestroy(&EM);
+	VecDestroy(&ERhs);
+	VecDestroy(&Uproj);
+}
+
+void TransportOpt2D::L2Projection_Convection(const vector<double> w, vector<double> &Nx, vector<array<double, dim>> &dNdx, const vector<int> &IEN, double detJ, vector<double> &Proj)
+{
+	int a, b, nen = IEN.size();
+	double Pe, delta;
+
+
+	for (int j = 0; j < nTstep; j++)
+	{
+		for (int i = 0; i < nen; i++)
+		{
+			a = i + j * nen;
+			Proj[a] += (w[0] * dNdx[i][0] + w[1] * dNdx[i][1]) * detJ;
+		}
+	}
+}
+
 void TransportOpt2D::L2Projection(const vector<double> val_ini[state_num], vector<double> &Nx, vector<array<double, dim>> &dNdx, const vector<int>& IEN, double detJ, vector<double> &Proj)
 {
 	int a, b, nen = IEN.size();
@@ -1048,7 +1268,7 @@ void TransportOpt2D::L2Projection(const vector<double> val_ini[state_num], vecto
 		for (int i = 0; i < nen; i++)
 		{
 			a = i + j * nen;
-			Proj[a] += n0Val * dNdx[i][0] + npVal * dNdx[i][1] * detJ;
+			Proj[a] += (n0Val * dNdx[i][0] + npVal * dNdx[i][1]) * detJ;
 		}
 	}
 }
@@ -1151,6 +1371,121 @@ void TransportOpt2D::ComputeStableMatrix(const vector<double> val_ini[state_num]
 	// for (a = 0; a < nen; a++)
 	// 	for (b = 0; b < nen; b++)
 	// 		StableMat[a][b] += Nx[a] * dNdx[b][dir] * detJ;
+}
+
+void TransportOpt2D::ComputeStableMatrix_Convection(const vector<double> w, double h, vector<double> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, const double detJ, const vector<int> &IEN, vector<vector<double>> &StableMat)
+{
+	int a, b, nen = IEN.size();
+	double Pe, delta;
+	double scale;
+
+	// cout << "IEN.size() = " << nen <<endl;
+
+	vector<double> n0_node, nplus_node, nminus_node;
+	// vector<double> vplus_node[dim], vminus_node[dim];
+	n0_node.clear();
+	n0_node.resize(nen, 0.0);
+	nplus_node.clear();
+	nplus_node.resize(nen, 0.0);
+
+	for (int j = 0; j < nTstep; j++)
+	{
+
+		// Pe = h * sqrt(w[0] * w[0] + w[0]* w[1]) / 2.0 / par[0];
+		// * SUPG stabilization term
+		// if (Pe < 1.0)
+		// 	delta = 0.0;
+		// else
+		// 	delta = h / 2.0 / sqrt(w[0] * w[0] + w[0] * w[1]) * (1.0 - 1.0 / Pe);
+
+		Pe = h * sqrt(w[0] * w[0] + w[1] * w[1]) / par[0];
+		// * LPS stabilization term
+		if (Pe < 1.0)
+			delta = 0.0;
+		else
+			delta = h / sqrt(w[0] * w[0] + w[1] * w[1]);
+
+		// cout << "Pe: " << Pe << " delta: " << delta << endl;
+		// getchar();
+
+		for (int i = 0; i < nen; i++)
+		{
+			for (int k = 0; k < nen; k++)
+			{
+				// cout << "i: " << i << " k: " << k <<"\n";
+				// a = i + nen * 0 + j * nen * state_num;
+				// b = k + nen * 0 + j * nen * state_num;
+				a = i + nen * 0 + j * nen;
+				b = k;
+				// * SUPG stabilization term
+				// StableMat[a][b] += delta * detJ * ((n0Val * dNdx[i][0] + npVal * dNdx[i][1]) * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) - par[0] * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) * (dN2dx2[i][0][0] + dN2dx2[i][1][1]));
+				// * LPS stabilization term
+				
+				if(time_int != 0)
+					scale = dt;
+				else
+					scale = 1.0;
+
+				double conv_i = w[0] * dNdx[i][0] + w[1] * dNdx[i][1];
+				double conv_k = w[0] * dNdx[k][0] + w[1] * dNdx[k][1];
+				StableMat[a][b] += delta * detJ * scale * (conv_i - wdNdx_proj[i + j * nen] ) * (conv_k - wdNdx_proj[k + j * nen]);
+
+				// a = i + nen * 1 + j * nen * state_num;
+				// b = k + nen * 0 + j * nen * state_num;
+				// StableMat[a][b] += delta * detJ * ((w[0] * dNdx[i][0] + w[1] * dNdx[i][1]) * (w[0] * dNdx[k][0] + w[1] * dNdx[k][1]) - par[0] * (w[0] * dNdx[k][0] + npVal * dNdx[k][1]) * (dN2dx2[i][0][0] + dN2dx2[i][1][1]));
+			}
+		}
+	}
+
+	// for (a = 0; a < nen; a++)
+	// 	for (b = 0; b < nen; b++)
+	// 		StableMat[a][b] += Nx[a] * dNdx[b][dir] * detJ;
+}
+
+void TransportOpt2D::ComputeStableMatrix_Convection2(const vector<double> w, double h, vector<vector<double>> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<double> &Nx_disc, vector<array<double, dim>> &dNdx_disc, const double detJ, const double detJ_disc, const vector<int> &IEN, vector<vector<double>> &StableMat)
+{
+	int a, b, nen = IEN.size();
+	double Pe, delta;
+	double scale;
+
+	for (int j = 0; j < nTstep; j++)
+	{
+
+		Pe = h * sqrt(w[0] * w[0] + w[1] * w[1]) / par[0];
+		// * LPS stabilization term
+		if (Pe < 1.0)
+			delta = 0.0;
+		else
+			delta = h / sqrt(w[0] * w[0] + w[1] * w[1]);
+
+		delta *= 1.0;
+
+		for (int i = 0; i < nen; i++)
+		{
+			for (int k = 0; k < nen; k++)
+			{
+				a = i + nen * 0 + j * nen;
+				b = k;
+				// * LPS stabilization term
+
+				if (time_int != 0)
+					scale = dt;
+				else
+					scale = 1.0;
+
+				double conv_i = w[0] * dNdx[i][0] + w[1] * dNdx[i][1];
+				double conv_k = w[0] * dNdx[k][0] + w[1] * dNdx[k][1];
+				double conv_proj_i = 0.0, conv_proj_k = 0.0;
+				for (int idx = 0; idx < wdNdx_proj[i].size();idx++)
+				{
+					conv_proj_i += wdNdx_proj[i][idx] * Nx_disc[idx];
+					conv_proj_k += wdNdx_proj[k][idx] * Nx_disc[idx];
+				}
+				// cout << "conv_i - conv_proj_i" << conv_i - conv_proj_i << "\n";
+				StableMat[a][b] += delta * detJ * scale * (conv_i - conv_proj_i) * (conv_k - conv_proj_k);
+			}
+		}
+	}
 }
 
 void TransportOpt2D::ComputeResVector(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ, vector<double> &qtmp)
@@ -1300,19 +1635,26 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	cout << "Process:" << comRank << " out of " << nProcess << " Start Loop for "<< bzmesh_process.size() <<" elements.\n";
 	for (e=0;e<bzmesh_process.size();e++){
 
-		double h(1.0/10.0);
+		double h(1.0/30.0);
 
 		int nen, A;
 		double ux_bc, uy_bc, uz_bc, p_bc;
 	
 		double dudx[dim][dim];
-		double detJ, detJ_all(0.0);
+		double detJ;
 		vector<double> Nx;
 		vector<array<double, 2>> dNdx;
 		vector<array<array<double, 2>, 2>> dN2dx2;
 		vector<vector<double>> Mtmp, Ktmp, Pxtmp, Pytmp, Convtmp, Stabletmp;
 
+		// ! LPS method
+		int ne_disc = 4;
+		vector<double> wdNdx;
 		vector<double> wdNdx_proj;
+		vector<vector<double>> wdNdx_proj2;
+		double detJ_disc, detJ_all(0.0);
+		vector<double> Nx_disc;
+		vector<array<double, 2>> dNdx_disc;
 
 		vector<double> n0_node, nplus_node, nminus_node;
 		vector<double> vplus_node[dim], vminus_node[dim];
@@ -1320,11 +1662,15 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		
 		nen = bzmesh_process[e].IEN.size();
 		
-		Nx.clear(); Nx.resize(nen, 0);
-		dNdx.clear(); dNdx.resize(nen, { 0 });
-		dN2dx2.clear(); dN2dx2.resize(nen, { {0} });
+		Nx.clear(); 		Nx.resize(nen, 0);
+		dNdx.clear(); 		dNdx.resize(nen, { 0 });
+		dN2dx2.clear(); 	dN2dx2.resize(nen, { {0} });
+		wdNdx.clear();		wdNdx.resize(nen * nTstep, 0.0);
 
-		wdNdx_proj.clear(); wdNdx_proj.resize(nen * nTstep, 0.0);
+		wdNdx_proj.clear(); 	wdNdx_proj.resize(ne_disc * nTstep, 0.0);
+		Nx_disc.clear();
+		Nx_disc.resize(ne_disc, 0);
+		dNdx_disc.clear();		dNdx_disc.resize(ne_disc, {0});
 
 		// n0_node.clear(); n0_node.resize(nen, 0);
 		// nplus_node.clear(); nplus_node.resize(nen, 0);
@@ -1358,13 +1704,23 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		}
 		// getchar();
 
+	    // ! Convection velocity
+		double theta = PI/6 *1.0;
+		vector<double> w = {1.0 * cos(theta), 1.0 * sin(theta)};
+
+
+
 		// for (int i = 0; i < Gpt.size(); i++)
 		// {
 		// 	for (int j = 0; j < Gpt.size(); j++)
 		// 	{
 		// 		BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
-		// 		L2Projection(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
-		// 		detJ_all +=detJ;
+		// 		BasisFunctionCoarseSpace(Gpt[i], Gpt[j], 4, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx_disc, dNdx_disc, detJ_disc);
+		// 		//L2Projection_Convection(w, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
+		// 		detJ = wght[i] * wght[j] * detJ;
+		// 		L2Projection_Convection(w, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
+		// 		// detJ_all +=detJ_disc;
+		// 		detJ_all += detJ;
 		// 	}
 		// }
 
@@ -1372,20 +1728,32 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		// {
 		// 	wdNdx_proj[i]/=detJ_all;
 		// }
-	    // ! Convection velocity
-		vector<double> w ={cos(PI/6.0), sin(PI/6.0)};
 
-		for (int i = 0; i < Gpt.size(); i++){
-			for (int j = 0; j < Gpt.size(); j++){
-					BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
-					detJ = wght[i] * wght[j] * detJ;
-					ComputeMassMatrix(Nx, detJ, Mtmp);
-					ComputeStiffMatrix(dNdx, detJ, Ktmp);
-					ComputeConvectMatrix(w,Nx,dNdx,detJ, Convtmp);
-					ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
-					ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
-					// ComputeStableMatrix(val_ini, h, wdNdx_proj, Nx, dNdx, dN2dx2, detJ, bzmesh_process[e].IEN, Stabletmp);
-					// ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
+		LocalL2Projection(e, w, wdNdx_proj2);
+
+		for (int i = 0; i < Gpt.size(); i++)
+		{
+			for (int j = 0; j < Gpt.size(); j++)
+			{
+				BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
+				detJ = wght[i] * wght[j] * detJ;
+				ComputeMassMatrix(Nx, detJ, Mtmp);
+				ComputeStiffMatrix(dNdx, detJ, Ktmp);
+				ComputeConvectMatrix(w, Nx, dNdx, detJ, Convtmp);
+				ComputeParMatrix(Nx, dNdx, detJ, 0, Pxtmp);
+				ComputeParMatrix(Nx, dNdx, detJ, 1, Pytmp);
+				// ComputeStableMatrix(val_ini, h, wdNdx_proj, Nx, dNdx, dN2dx2, detJ, bzmesh_process[e].IEN, Stabletmp);
+				//ComputeStableMatrix_Convection(w, h, wdNdx_proj, Nx, dNdx, dN2dx2, detJ, bzmesh_process[e].IEN, Stabletmp);
+
+				// for (int k = 0; k < nen;k++)
+				// {
+				// 	wdNdx[k] = w[0] * dNdx[k][0] + w[1] * dNdx[k][1];
+				// }
+
+				BasisFunctionCoarseSpace(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx_disc, dNdx_disc, detJ_disc);
+				detJ_disc = wght[i] * wght[j] * detJ;
+				ComputeStableMatrix_Convection2(w, h, wdNdx_proj2, Nx, dNdx, Nx_disc, dNdx_disc, detJ, detJ_disc, bzmesh_process[e].IEN, Stabletmp);
+				// ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
 			}
 		}
 
@@ -1397,7 +1765,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		MatrixAssembly(Pxtmp, bzmesh_process[e].IEN, P[0]);
 		MatrixAssembly(Pytmp, bzmesh_process[e].IEN, P[1]);
 		MatrixAssembly(Convtmp,  bzmesh_process[e].IEN, Conv);
-		// StableMatAssembly(Stabletmp, bzmesh_process[e].IEN, Stable);
+		StableMatAssembly(Stabletmp, bzmesh_process[e].IEN, Stable);
 		// getchar();
 	
 	}
@@ -1408,7 +1776,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	MatAssemblyBegin(P[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(Conv, MAT_FINAL_ASSEMBLY);
-	// MatAssemblyBegin(Stable, MAT_FINAL_ASSEMBLY);
+	MatAssemblyBegin(Stable, MAT_FINAL_ASSEMBLY);
 	// VecAssemblyBegin(Res_nl);
 }
 
@@ -2025,12 +2393,13 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 			for (int i = 0; i < ncols_k; i++)
 			{
 				// ! Pure Diffusion
-				// vals[i] = par[0] * vals_k[i];
+				//vals[i] = par[0] * vals_k[i];
 				// ! Convection
 				vals[i] = par[0] * vals_k[i] + vals_conv[i];
+
 				col[i] = cols_k[i];
 			}
-			MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
+			MatSetValues(A, 1, &row, ncols_k, col, vals, INSERT_VALUES);
 		}
 		
 		
@@ -2176,7 +2545,8 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 			{
 				bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				
 				// bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;	
-				bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
+				// bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
+				bc_vals[count + 0] = 0.0; //! bc for linear
 				// bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
 				count += 1;
 				continue;
@@ -2275,8 +2645,8 @@ void TransportOpt2D::TangentMatSetup()
 	MatAssemblyBegin(Asubmat[6], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[6], MAT_FINAL_ASSEMBLY);
 	//! Stablization mat
-	// MatAXPY(Asubmat[6], 1.0, Stable, DIFFERENT_NONZERO_PATTERN);
-	// PetscObjectSetName((PetscObject) Stable, "MatStable");
+	MatAXPY(Asubmat[6], 1.0, Stable, DIFFERENT_NONZERO_PATTERN);
+	//PetscObjectSetName((PetscObject) Stable, "MatStable");
 	// DebugVisualizeMat(Stable, work_dir + "debug/Stable.m");
 
 	MatTranspose(Asubmat[6],MAT_INITIAL_MATRIX,&Asubmat[2]); //correct
@@ -2535,6 +2905,7 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 	MatZeroEntries(P[0]);
 	MatZeroEntries(P[1]);
 	MatZeroEntries(Conv);
+	MatZeroEntries(Stable);
 
 	BuildLinearSystemProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 
@@ -2543,6 +2914,7 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 	MatAssemblyEnd(P[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(P[1], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Conv, MAT_FINAL_ASSEMBLY);
+	MatAssemblyEnd(Stable, MAT_FINAL_ASSEMBLY);
 
 	t1 = time(NULL);
 	PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
@@ -2608,8 +2980,7 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		// DebugVisualizeMat(K,  work_dir + "debug/KMat.m");
 		// DebugVisualizeMat(P[0],  work_dir + "debug/PxMat.m");
 		// DebugVisualizeMat(P[1],  work_dir + "debug/PyMat.m");
-
-	
+		DebugVisualizeMat(Conv, work_dir + "debug/ConvMat.m");
 
 		ResidualVecSetup(X);
 		//! Apply BC:Modify for stabilization method
@@ -2673,11 +3044,12 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		VecAXPY(X, 1.0, dX);
 
 		PetscPrintf(PETSC_COMM_WORLD, "Visualizing...\n");
-		for(int i = 0; i < nTstep; i++)
+		string output_fld = "test2/";
+		for (int i = 0; i < nTstep; i++)
 		{
 			// VisualizeVTK_ControlMesh_Burger(ctx->pts, ctx->mesh, i, l, work_dir + "test1/");
-			VisualizeVTK_ControlMesh_Heat(ctx->pts, ctx->mesh, i, l, work_dir + "test_steady_conv/");
-			VisualizeVTK_PhysicalDomain(i, l, work_dir + "test_steady_conv/");
+			VisualizeVTK_ControlMesh_Heat(ctx->pts, ctx->mesh, i, l, work_dir + output_fld);
+			VisualizeVTK_PhysicalDomain(i, l, work_dir + output_fld);
 		}
 
 		PetscReal ResVal;
@@ -3100,14 +3472,18 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 	vector<array<double, 3>> spt_all;//sample points
 	vector<double> sresult_all;
 	vector<array<int, 4>> sele_all;
+
+	const int ns_ele = 9;
+	const int ns_pt = 16;
 	double detJ;
 	int num_bzmesh_ele = bzmesh_process.size();
-	double spt_proc[num_bzmesh_ele * 4 * 3];
-	double sresult_proc[num_bzmesh_ele * 4 * result_num];
-	int sele_proc[num_bzmesh_ele * 4];
-	for (unsigned int e = 0; e<num_bzmesh_ele; e++)
+	double spt_proc[num_bzmesh_ele * ns_pt * 3];
+	double sresult_proc[num_bzmesh_ele * ns_pt * result_num];
+	int sele_proc[num_bzmesh_ele * ns_ele * 4];
+	cout << "num_bzmesh_ele: " << num_bzmesh_ele << "\n";
+	for (unsigned int e = 0; e < num_bzmesh_ele; e++)
 	{
-		int ns(2);
+		int ns(4);
 		vector<double> su(ns);
 		for (int i = 0; i < ns; i++)
 		{
@@ -3115,6 +3491,8 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 		}
 
 		int loc(0);
+
+		// * Compute cordinates and nodal results on sample points 
 		for (int a = 0; a<ns; a++)
 		{
 			for (int b = 0; b<ns; b++)
@@ -3122,12 +3500,12 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 					double pt1[3], dudx[3];
 					double result[result_num];
 					ResultCal_Bezier(su[b], su[a], time, bzmesh_process[e], pt1, result, dudx, detJ);
-					spt_proc[4 * 3 * e + loc*3 + 0] = pt1[0];
-					spt_proc[4 * 3 * e + loc*3 + 1] = pt1[1];
-					spt_proc[4 * 3 * e + loc*3 + 2] = pt1[2];
+					spt_proc[e * ns_pt * 3 + loc * 3 + 0] = pt1[0];
+					spt_proc[e * ns_pt * 3 + loc * 3 + 1] = pt1[1];
+					spt_proc[e * ns_pt * 3 + loc * 3 + 2] = 0.0; // ! for 2D problem
 					for(int c = 0; c<result_num;c++)
 					{
-						sresult_proc[result_num * 4 * e + loc * result_num + c] = result[c];
+						sresult_proc[result_num * ns_pt * e + loc * result_num + c] = result[c];
 					}
 					// sresult_proc[32 * e + loc * 4 + 0] = result[0];
 					// sresult_proc[32 * e + loc * 4 + 1] = result[1];
@@ -3137,19 +3515,25 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 				
 			}
 		}
+		// getchar();
+		// * Compute mesh connectivity of sample elements
 		int nns[2] = { ns*ns, ns };
-		for (int a = 0; a<ns - 1; a++)
+		loc = 0;
+		for (int a = 0; a < ns - 1; a++)
 		{
 			for (int b = 0; b<ns - 1; b++)
 			{
-				sele_proc[4 * e + 0] = 4 * e + a * ns + b;
-				sele_proc[4 * e + 1] = 4 * e + a * ns + b + 1;
-				sele_proc[4 * e + 2] = 4 * e + (a + 1) * ns + (b + 1);
-				sele_proc[4 * e + 3] = 4 * e + (a + 1) * ns + b;
+				sele_proc[e * ns_ele * 4 + loc * 4 + 0] = e * ns_pt + a * ns + b;
+				sele_proc[e * ns_ele * 4 + loc * 4 + 1] = e * ns_pt + a * ns + b + 1;
+				sele_proc[e * ns_ele * 4 + loc * 4 + 2] = e * ns_pt + (a + 1) * ns + (b + 1);
+				sele_proc[e * ns_ele * 4 + loc * 4 + 3] = e * ns_pt + (a + 1) * ns + b;		
+				// cout << "e: " << e << " loc: " << loc << " " << sele_proc[e * ns_ele * 4 + loc * 4 + 0] << " " << sele_proc[e * ns_ele * 4 + loc * 4 + 1] << " " << sele_proc[e * ns_ele * 4 + loc * 4 + 2] << " " << sele_proc[e * ns_ele * 4 + loc * 4 + 3] << endl;
+				loc++;
 			}
 		}
+
+		//cout << "e: " << e << endl;
 	}
-	
 
 	double *spts= NULL;
 	double *sresults=NULL;
@@ -3164,7 +3548,7 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 
 	if (comRank == 0)
 	{		
-		num_bzmesh_eles = (int*)malloc(sizeof(int)*nProcess);
+		num_bzmesh_eles = (int*)malloc(sizeof(int)*nProcess); 
 		recvcounts_spts = (int*)malloc(sizeof(int)*nProcess);
 		recvcounts_sresults = (int*)malloc(sizeof(int)*nProcess);
 		recvcounts_seles = (int*)malloc(sizeof(int)*nProcess);
@@ -3174,9 +3558,9 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 
 	if (comRank == 0)
 	{
-		spts = (double*)malloc(sizeof(double) * 3 * 4 * n_bzmesh);
-		sresults = (double*)malloc(sizeof(double) * result_num * 4 * n_bzmesh);
-		seles = (int*)malloc(sizeof(int) * 8 * n_bzmesh);
+		spts = (double *)malloc(sizeof(double) * 3 * n_bzmesh * ns_pt);
+		sresults = (double*)malloc(sizeof(double) * result_num * n_bzmesh* ns_pt);
+		seles = (int *)malloc(sizeof(int) * 4 * n_bzmesh * ns_ele);
 
 		displs_spts = (int*)malloc(nProcess * sizeof(int));
 		displs_sresults = (int*)malloc(nProcess * sizeof(int));
@@ -3186,37 +3570,36 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 		displs_seles[0] = 0;
 
 		for (int i = 1; i<nProcess; i++) {
-			displs_spts[i] = displs_spts[i - 1] + num_bzmesh_eles[i - 1] * 3 * 4;
-			displs_sresults[i] = displs_sresults[i - 1] + num_bzmesh_eles[i - 1] * result_num * 4;
-			displs_seles[i] = displs_seles[i - 1] + num_bzmesh_eles[i - 1] * 4;
+			displs_spts[i] = displs_spts[i - 1] + num_bzmesh_eles[i - 1] * 3 * ns_pt;
+			displs_sresults[i] = displs_sresults[i - 1] + num_bzmesh_eles[i - 1] * result_num * ns_pt;
+			displs_seles[i] = displs_seles[i - 1] + num_bzmesh_eles[i - 1] * 4 * ns_ele;
 		}
 
 		for (int i = 0; i < nProcess; i++)
 		{
-			recvcounts_spts[i] = num_bzmesh_eles[i] * 4 * 3;
-			recvcounts_sresults[i] = num_bzmesh_eles[i] * 4 * result_num;
-			recvcounts_seles[i] = num_bzmesh_eles[i] * 4;
+			recvcounts_spts[i] = num_bzmesh_eles[i] * ns_pt * 3;
+			recvcounts_sresults[i] = num_bzmesh_eles[i] * ns_pt * result_num;
+			recvcounts_seles[i] = num_bzmesh_eles[i] * ns_ele * 4;
 		}
-	}	
+	}
 
-	MPI_Gatherv(spt_proc, num_bzmesh_ele * 4 * 3, MPI_DOUBLE, spts, recvcounts_spts, displs_spts, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
-	MPI_Gatherv(sresult_proc, num_bzmesh_ele * 4 * result_num, MPI_DOUBLE, sresults, recvcounts_sresults, displs_sresults ,MPI_DOUBLE, 0, PETSC_COMM_WORLD);
-	MPI_Gatherv(sele_proc, num_bzmesh_ele * 4, MPI_INT, seles, recvcounts_seles, displs_seles, MPI_INT, 0, PETSC_COMM_WORLD);
-	
-	
+	MPI_Gatherv(spt_proc, num_bzmesh_ele * ns_pt * 3, MPI_DOUBLE, spts, recvcounts_spts, displs_spts, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+	MPI_Gatherv(sresult_proc, num_bzmesh_ele * ns_pt * result_num, MPI_DOUBLE, sresults, recvcounts_sresults, displs_sresults, MPI_DOUBLE, 0, PETSC_COMM_WORLD);
+	MPI_Gatherv(sele_proc, num_bzmesh_ele * ns_ele * 4, MPI_INT, seles, recvcounts_seles, displs_seles, MPI_INT, 0, PETSC_COMM_WORLD);
+
 	if (comRank == 0)
 	{
 		for (int i = 0; i < n_bzmesh; i++)
 		{
-			for (int j = 0; j < 4; j++)
+			for (int j = 0; j < ns_pt; j++)
 			{
-				array<double, 3> pt = { spts[i * 12 + j * 3 + 0], spts[i * 12 + j * 3 + 1], spts[i * 12 + j * 3 + 2] };
+				array<double, 3> pt = {spts[i * ns_pt * 3 + j * 3 + 0], spts[i * ns_pt * 3 + j * 3 + 1], spts[i * ns_pt * 3 + j * 3 + 2]};
 				spt_all.push_back(pt);
-				for(int c = 0; c<result_num;c++)
+				for (int c = 0; c < result_num; c++)
 				{
-					sresult_all.push_back(sresults[i * result_num * 4 + j * result_num + c]);
+					sresult_all.push_back(sresults[i * result_num * ns_pt + j * result_num + c]);
 				}
-			}			
+			}
 		}
 		int sum_ele = 0;
 		int pstart = 0;
@@ -3224,15 +3607,18 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 		{
 			for (int e = 0; e < num_bzmesh_eles[i]; e++)
 			{
-				array<int, 4> el;
-				el[0] = pstart + seles[4 * sum_ele + 0];
-				el[1] = pstart + seles[4 * sum_ele + 1];
-				el[2] = pstart + seles[4 * sum_ele + 2];
-				el[3] = pstart + seles[4 * sum_ele + 3];
-				sele_all.push_back(el);
+				for (int nse = 0; nse < ns_ele; nse++)
+				{
+					array<int, 4> el;
+					el[0] = pstart + seles[ns_ele * sum_ele * 4 + nse * 4 + 0];
+					el[1] = pstart + seles[ns_ele * sum_ele * 4 + nse * 4 + 1];
+					el[2] = pstart + seles[ns_ele * sum_ele * 4 + nse * 4 + 2];
+					el[3] = pstart + seles[ns_ele * sum_ele * 4 + nse * 4 + 3];
+					sele_all.push_back(el);
+				}
 				sum_ele++;
 			}
-			pstart = pstart + num_bzmesh_eles[i] * 4;
+			pstart = pstart + num_bzmesh_eles[i] * ns_ele * 4;
 		}
 		// cout << "Visualizing in Physical Domain...\n";
 		WriteVTK(spt_all, sresult_all, sele_all, time, step, fn);

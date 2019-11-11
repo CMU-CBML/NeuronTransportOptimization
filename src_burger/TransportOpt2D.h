@@ -141,6 +141,7 @@ private:
 	void StableMatAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
 	void MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
 	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[state_num], const vector<double> val_ini[state_num]);
+	void BuildLinearSystemStable(const vector<Vertex2D> &cpts, const vector<Element2D> &tmesh);
 	void BuildResVectorProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[state_num], const vector<double> val_ini[state_num]);
 
 

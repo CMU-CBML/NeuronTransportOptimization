@@ -528,6 +528,11 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 			{
 				col_yk[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				vals_yk[count + 0] = ctx->val_bc[1][i];
 				count += 1;
+				// col_yk[count + 0] = i + 0 * nPoint + j * state_num * nPoint;
+				// vals_yk[count + 0] = ctx->val_bc[0][i];
+				// col_yk[count + 1] = i + 1 * nPoint + j * state_num * nPoint;
+				// vals_yk[count + 1] = ctx->val_bc[1][i];
+				// count += 2;
 				continue;
 			}
 			// else if (ctx->bc_flag[i] == -3)
@@ -1057,7 +1062,7 @@ void TransportOpt2D::L2Projection(const vector<double> val_ini[state_num], vecto
 		for (int i = 0; i < nen; i++)
 		{
 			a = i + j * nen;
-			Proj[a] += n0Val * dNdx[i][0] + npVal * dNdx[i][1] * detJ;
+			Proj[a] += (n0Val * dNdx[i][0] + npVal * dNdx[i][1]) * detJ;
 		}
 	}
 }
@@ -1142,12 +1147,12 @@ void TransportOpt2D::ComputeStableMatrix(const vector<double> val_ini[state_num]
 				a = i + nen * 0 + j * nen;
 				b = k;
 				// * SUPG stabilization term
-				StableMat[a][b] += delta * detJ * dt * ((n0Val * dNdx[i][0] + npVal * dNdx[i][1]) * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) - par[0] * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) * (dN2dx2[i][0][0] + dN2dx2[i][1][1]));
+				// StableMat[a][b] += delta * detJ * dt * ((n0Val * dNdx[i][0] + npVal * dNdx[i][1]) * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) - par[0] * (n0Val * dNdx[k][0] + npVal * dNdx[k][1]) * (dN2dx2[i][0][0] + dN2dx2[i][1][1]));
 				// * LPS stabilization term 
 
-				// double conv_i = n0Val * dNdx[i][0] + npVal * dNdx[i][1];
-				// double conv_k = n0Val * dNdx[k][0] + npVal * dNdx[k][1];
-				// StableMat[a][b] += delta * detJ * dt * (conv_i - wdNdx_proj[i + j * nen] ) * (conv_k - wdNdx_proj[k + j * nen]);
+				double conv_i = n0Val * dNdx[i][0] + npVal * dNdx[i][1];
+				double conv_k = n0Val * dNdx[k][0] + npVal * dNdx[k][1];
+				StableMat[a][b] += delta * detJ * dt * (conv_i - wdNdx_proj[i + j * nen] ) * (conv_k - wdNdx_proj[k + j * nen]);
 
 				// a = i + nen * 1 + j * nen * state_num;
 				// b = k + nen * 0 + j * nen * state_num;
@@ -1371,7 +1376,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 			{
 				BasisFunction(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx, dNdx, dN2dx2, dudx, detJ);
 				L2Projection(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ, wdNdx_proj);
-				detJ_all +=detJ;
+				detJ_all += wght[i] * wght[j] * detJ;
 			}
 		}
 
@@ -2031,10 +2036,10 @@ void TransportOpt2D::FormMatrixA33(Mat M, Mat K, Mat &A)
 	PetscObjectSetName((PetscObject) A, "Asub33");
 
 	// //explicitly set diagonal to be zero
-	// PetscInt row, start, end;  
-	// MatGetOwnershipRange(A,&start,&end);
-	// for(row = start; row < end; row++)
-	// 	MatSetValue(A, row, row, 0.0, INSERT_VALUES);
+	PetscInt row, start, end;  
+	MatGetOwnershipRange(A,&start,&end);
+	for(row = start; row < end; row++)
+		MatSetValue(A, row, row, 0.0, INSERT_VALUES);
 
 
 	// // MatAssemblyBegin(A, MAT_FINAL_ASSEMBLY);
@@ -2073,8 +2078,10 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 			}
 			else if (ctx->bc_flag[i] == -3)
 			{
-				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint;				
-				bc_vals[count + 0] = ctx->val_bc[1][i]-State[1][i + j * nPoint];
+				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint;
+				// bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint;
+				bc_vals[count + 0] = ctx->val_bc[0][i] - State[1][i + j * nPoint];
+				// bc_vals[count + 1] = ctx->val_bc[1][i] - State[1][i + j * nPoint];
 				count += 1;
 				continue;
 			}
@@ -2158,6 +2165,11 @@ void TransportOpt2D::ApplyBoundaryCondition(const UserSetting2D *ctx, int flag)
 				bc_global_ids[count + 0] = i + 1 * nPoint + j * state_num * nPoint + (state_num+ctrl_num) *nPoint *nTstep;				
 				bc_vals[count + 0] = 0.0 - Lambda[1][i + j * nPoint];
 				count += 1;
+				// bc_global_ids[count + 0] = i + 0 * nPoint + j * state_num * nPoint + (state_num + ctrl_num) * nPoint * nTstep;
+				// bc_global_ids[count + 1] = i + 1 * nPoint + j * state_num * nPoint + (state_num + ctrl_num) * nPoint * nTstep;
+				// bc_vals[count + 0] = 0.0 - Lambda[0][i + j * nPoint];
+				// bc_vals[count + 1] = 0.0 - Lambda[1][i + j * nPoint];
+				// count += 2;
 				continue;
 			}
 			// else if (ctx->bc_flag[i] == -3)
@@ -2405,7 +2417,7 @@ void TransportOpt2D::FormResVecb3(Vec x)
 	VecScale(vec_tmp2, -1.0); // vec_tmp2 = -A32 * u_k
 
 	VecCopy(Res_nl, vec_tmp3);
-	// VecSet(vec_tmp3, 0.0);
+	VecSet(vec_tmp3, 0.0); // ! Pure diffusion
 	VecWAXPY(vec_tmp0, 1.0, vec_tmp1, vec_tmp2); //vec_tmp1 + vec_tmp2 = -A31 * y_k -A32 * u_k
 	VecWAXPY(bsub[2], 1.0, vec_tmp3, vec_tmp0); //vec_tmp0 + vec_tmp3 = d(y_k) -A31 * y_k -A32 * u_k
 	PetscObjectSetName((PetscObject) bsub[2], "bsub3");

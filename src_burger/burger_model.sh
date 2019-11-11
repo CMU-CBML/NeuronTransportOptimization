@@ -12,6 +12,6 @@
 
 # mpiexec -n 1 ./neuron_opt -f ../io/burger2/ -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -ksp_error_if_not_converged
 
-mpiexec -n 1 ./neuron_opt -f ../io/burger3/ -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -ksp_error_if_not_converged
+# mpiexec -n 1 ./neuron_opt -f ../io/burger3/ -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -ksp_error_if_not_converged
 
-# mpiexec -n 1 ./neuron_opt -f ../io/burger4/ -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -ksp_error_if_not_converged
+mpiexec -n 1 ./neuron_opt -f ../io/burger4/ -ksp_type preonly -pc_type lu -pc_factor_mat_solver_type mumps -ksp_error_if_not_converged

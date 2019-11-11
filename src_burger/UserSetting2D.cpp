@@ -154,7 +154,7 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 				bc_flag[i] = -1;
 				continue;
 			}
-			else if (abs(pts[i].coor[0] - 1.0) < eps)
+			else if (abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
 			{
 				/// Concentration
 				val_bc[0][i] = 0.0;
