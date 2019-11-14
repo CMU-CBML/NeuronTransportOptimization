@@ -26,6 +26,8 @@ const int result_num = 3;
 const int bzpt_num = 16;
 const int time_int = 0; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
 
+const int debug_rank = 0; // * For Parallel implementation debug
+
 class TransportOpt2D
 {
 private:

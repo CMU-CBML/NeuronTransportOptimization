@@ -197,36 +197,99 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		// 	count++;
 		// }
 		// ! Convection test
+		// for (i = 0; i < pts.size(); i++)
+		// {
+		// 	if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
+		// 	//if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps )
+		// 	{
+		// 		bc_flag[i] = -1;
+		// 		// if (abs(pts[i].coor[1] - 1.0) < eps || ((pts[i].coor[1] > 0.5) && (pts[i].coor[1] < 1.0) && abs(pts[i].coor[0] - 0.0) < eps))
+		// 		// {
+		// 		// 	/// Concentration
+		// 		// 	val_bc[0][i] = 1.0;			
+		// 		// 	continue;
+		// 		// }
+		// 		// else
+		// 		// {
+		// 		// 	val_bc[0][i] = 0.0;
+		// 		// 	continue;
+		// 		// }
+		// 		// test 2
+		// 		double x1 = pts[i].coor[0];
+		// 		double x2 = pts[i].coor[1];
+		// 		if (x1 <= 0.5 && x2 <= 0.5)
+		// 		{
+		// 			val_bc[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
+		// 		}
+		// 		// if (x1>0. && x1 <= 0.5 && abs(x2 - 0.0) < eps)
+		// 		// {
+		// 		// 	val_bc[0][i] = 1.0;
+		// 		// }
+		// 		continue;
+		// 	}
+		// 	bc_flag[i] = count;
+		// 	count++;
+		// }
+		// ! Single pipe model
+		eps = 0.5;
 		for (i = 0; i < pts.size(); i++)
 		{
-			//if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
-			if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps )
+			double vmax = 0.0, vx = 0.0, vy = 0.0;
+			vmax = var[1] * (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			vx = vmax * (1.0 - (pts[i].coor[1] / 0.5) * (pts[i].coor[1] / 0.5));
+			if (abs(pts[i].coor[0] - 0.0) < eps)
 			{
+				// * simple test
+				val_bc[0][i] = 3.0;
+
+				///// Concentration
+				//val_bc[0][i] = 1.0;
+				//val_bc[1][i] = 2.0;
+				//val_bc[2][i] = 0.0;
+				///// v+
+				//val_bc[3][i] = vx;
+				//val_bc[4][i] = vy;
+				//// val_bc[3][i] = 1.0;
+				//// val_bc[4][i] = 0.0;
+				///// v-
+				////val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
+
+				///bc_flag
 				bc_flag[i] = -1;
-				// if (abs(pts[i].coor[1] - 1.0) < eps || ((pts[i].coor[1] > 0.5) && (pts[i].coor[1] < 1.0) && abs(pts[i].coor[0] - 0.0) < eps))
-				// {
-				// 	/// Concentration
-				// 	val_bc[0][i] = 1.0;			
-				// 	continue;
-				// }
-				// else
-				// {
-				// 	val_bc[0][i] = 0.0;
-				// 	continue;
-				// }
-				// test 2
-				double x1 = pts[i].coor[0];
-				double x2 = pts[i].coor[1];
-				// if (x1 <= 0.5 && x2 <= 0.5)
-				// {
-				// 	val_bc[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
-				// }
-				if (x1>0. && x1 <= 0.5 && abs(x2 - 0.0) < eps)
-				{
-					val_bc[0][i] = 1.0;
-				}
 				continue;
 			}
+			else if (abs(pts[i].coor[0] - 10.0) < eps)
+			{
+				// * simple test
+				val_bc[0][i] = 1.0;
+
+				// /// Concentration
+				// val_bc[0][i] = 1.0;
+				// val_bc[1][i] = 0.0;
+				// val_bc[2][i] = 2.0;
+				// /// v+
+				// //val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
+				// /// v-
+				// // val_bc[5][i] = -1.0;
+				// // val_bc[6][i] = 0.0;
+				// val_bc[5][i] = -vx;
+				// val_bc[6][i] = vy;
+				bc_flag[i] = -1; // ! Flag is changed
+				continue;
+			}
+			// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+			// {
+			// 	/// Concentration
+			// 	//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
+			// 	/// v+
+			// 	val_bc[3][i] = 0.0;
+			// 	val_bc[4][i] = 0.0;
+			// 	/// v-
+			// 	val_bc[5][i] = 0.0;
+			// 	val_bc[6][i] = 0.0;
+			// 	bc_flag[i] = -3;
+			// 	continue;
+			// }
 			bc_flag[i] = count;
 			count++;
 		}
@@ -286,56 +349,70 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 	{
 		/// For one pipe
 		double eps(1e-6);
-		double c1 = 0.40, c2 = 0.60;
+		// double c1 = 0.40, c2 = 0.60;
+		// for (i = 0; i < pts.size(); i++)
+		// {
+		// 	double x1 = pts[i].coor[0];
+		// 	double x2 = pts[i].coor[1];
+
+		// 	if ((pts[i].coor[0] >= c1 & pts[i].coor[0] <= c2) || (pts[i].coor[1] >= c1 & pts[i].coor[1] <= c2))
+		// 	{
+		// 		val_desire[0][i] = - pts[i].coor[0] * exp( - (pts[i].coor[0]-0.5)*(pts[i].coor[0]-0.5) - (pts[i].coor[1]-0.5)*(pts[i].coor[1]-0.5));
+		// 	}
+		// 	else
+		// 	{
+		// 		for(j = 0;j<STATE_NUM;j++)
+		// 		{
+		// 			val_desire[j][i] = 0.0;
+		// 		}
+		// 	}
+
+		// 	if((pts[i].coor[0] >=  0 & pts[i].coor[0] <= 0.5) && (pts[i].coor[1] >=  0 & pts[i].coor[1] <= 0.5))
+		// 	{
+		// 		val_desire[0][i] = 1.0;
+		// 	}
+		// 	else
+		// 	{
+		// 		for(j = 0;j<STATE_NUM;j++)
+		// 		{
+		// 			val_desire[j][i] = 0.0;
+		// 		}
+		// 	}
+
+
+		// 	//val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
+		// 	//  val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
+
+		// 	for(j = 0;j<STATE_NUM;j++)
+		// 	{
+		// 		val_desire[j][i] = 0.0;
+		// 	}
+		// 	if(x1<=0.5 && x2<=0.5)
+		// 	{
+		// 		val_desire[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
+		// 	}
+		// 	// if (x1>0 && x1 <= 0.5 )
+		// 	// {
+		// 	// 	val_desire[0][i] = 1.0;
+		// 	// }
+		// 	// for (j = 0; j < STATE_NUM; j++)
+		// 	// {
+		// 	// 	val_desire[j][i] = 0.0;
+		// 	// }
+		// }
+		//! For one pipe
 		for (i = 0; i < pts.size(); i++)
 		{
-			double x1 = pts[i].coor[0];
-			double x2 = pts[i].coor[1];
-
-			if ((pts[i].coor[0] >= c1 & pts[i].coor[0] <= c2) || (pts[i].coor[1] >= c1 & pts[i].coor[1] <= c2))
-			{
-				val_desire[0][i] = - pts[i].coor[0] * exp( - (pts[i].coor[0]-0.5)*(pts[i].coor[0]-0.5) - (pts[i].coor[1]-0.5)*(pts[i].coor[1]-0.5));
-			}
-			else
-			{
-				for(j = 0;j<STATE_NUM;j++)
-				{
-					val_desire[j][i] = 0.0;
-				}
-			}
-
-			if((pts[i].coor[0] >=  0 & pts[i].coor[0] <= 0.5) && (pts[i].coor[1] >=  0 & pts[i].coor[1] <= 0.5))
-			{
-				val_desire[0][i] = 1.0;
-			}
-			else
-			{
-				for(j = 0;j<STATE_NUM;j++)
-				{
-					val_desire[j][i] = 0.0;
-				}
-			}
-
-
-			//val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
-			//  val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
-
-			for(j = 0;j<STATE_NUM;j++)
-			{
-				val_desire[j][i] = 0.0;
-			}
-			// if(x1<=0.5 && x2<=0.5)
-			// {
-			// 	val_desire[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
-			// }
-			if (x1>0 && x1 <= 0.5 )
-			{
-				val_desire[0][i] = 1.0;
-			}
-			// for (j = 0; j < STATE_NUM; j++)
-			// {
-			// 	val_desire[j][i] = 0.0;
-			// }
+			double vmax = 0.0;
+			double x0 = pts[i].coor[0];
+			// * simple test
+			// val_desire[0][i] = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			val_desire[0][i] = 3.0 / 50.0 * x0 * x0 - 4.0 / 5.0 * x0 + 3.0;
+			//vmax = (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+			//val_desire[3][i] = vmax * (1.0 - (pts[i].coor[1] / 0.5) * (pts[i].coor[1] / 0.5));
+			//val_desire[4][i] = 0.0;
+			//val_desire[5][i] = vmax * (1.0 - (pts[i].coor[1] / 0.5) * (pts[i].coor[1] / 0.5));
+			//val_desire[6][i] = 0.0;
 		}
 		TXTWriteDesire(fn_in);
 	}

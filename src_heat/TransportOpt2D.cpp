@@ -44,6 +44,8 @@ void DebugVisualizeMat(Mat mat_debug, string fname)
 	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
     ierr = PetscViewerPushFormat(viewer,format);
     ierr = MatView(mat_debug,viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
 }
 
 void DebugVisualizeVec(Vec vec_debug, string fname)
@@ -55,6 +57,8 @@ void DebugVisualizeVec(Vec vec_debug, string fname)
 	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
     ierr = PetscViewerPushFormat(viewer,format);
     ierr = VecView(vec_debug,viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
 }
 
 void DebugVisualizeIS(IS is_debug, string fname)
@@ -66,6 +70,47 @@ void DebugVisualizeIS(IS is_debug, string fname)
 	ierr = PetscViewerASCIIOpen(PETSC_COMM_WORLD, fname.c_str() ,&viewer);
     ierr = PetscViewerPushFormat(viewer,format);
     ierr = ISView(is_debug,viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
+}
+
+void DebugVisualizeMatSelf(Mat mat_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+	PetscViewerFormat format = PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, fname.c_str(), &viewer);
+	ierr = PetscViewerPushFormat(viewer, format);
+	ierr = MatView(mat_debug, viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
+}
+
+void DebugVisualizeVecSelf(Vec vec_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+	PetscViewerFormat format = PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, fname.c_str(), &viewer);
+	ierr = PetscViewerPushFormat(viewer, format);
+	ierr = VecView(vec_debug, viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
+}
+
+void DebugVisualizeISSelf(IS is_debug, string fname)
+{
+	PetscErrorCode ierr;
+	PetscViewer viewer;
+	PetscViewerFormat format = PETSC_VIEWER_ASCII_MATLAB;
+
+	ierr = PetscViewerASCIIOpen(PETSC_COMM_SELF, fname.c_str(), &viewer);
+	ierr = PetscViewerPushFormat(viewer, format);
+	ierr = ISView(is_debug, viewer);
+	ierr = PetscViewerPopFormat(viewer);
+	ierr = PetscViewerDestroy(&viewer);
 }
 
 double MatrixDet(double dxdt[2][2])
@@ -131,6 +176,8 @@ TransportOpt2D::~TransportOpt2D()
 
 	MatDestroy(&M);
 	MatDestroy(&K);
+	MatDestroy(&Stable);
+	MatDestroy(&Conv);
 	MatDestroy(Asubmat);
 	MatDestroy(PCsubmat);
 	MatDestroy(P);
@@ -160,13 +207,13 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 
 	string fname_cmat = fn + "cmat.txt";
 
-	cout << fname_cmat <<endl;
+	// cout << fname_cmat <<endl;
 
 	ifstream fin_cmat;
 	fin_cmat.open(fname_cmat);
 	if (fin_cmat.is_open())	{
 		fin_cmat >> neles;
-		cout << neles << endl;
+		// cout << neles << endl;
 		bzmesh_process.resize(ele_process.size());
 		for (int i = 0; i<neles; i++){
 			if (i == ele_process[add]){
@@ -201,11 +248,11 @@ void TransportOpt2D::ReadBezierElementProcess(string fn)
 	string fname_bzpt = fn + "bzpt.txt";
 	ifstream fin_bzpt;
 	fin_bzpt.open(fname_bzpt);
-	cout << fname_bzpt <<endl;
+	// cout << fname_bzpt <<endl;
 	add = 0;
 	if (fin_bzpt.is_open()){
 		fin_bzpt >> npts;
-		cout << npts << endl;
+		// cout << npts << endl;
 		getline(fin_bzpt, stmp);
 		for (int e = 0; e < neles; e++)	{
 			if (e == ele_process[add]){
@@ -552,9 +599,11 @@ void TransportOpt2D::InitializeProblem(const UserSetting2D *ctx)
 	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * (2 * state_num + ctrl_num) * nTstep, &dX);
 	ierr = VecSet(Res_nl, 0.0);
 
-	ierr = VecCreate(PETSC_COMM_WORLD, &ResVec);
-	ierr = VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
-	ierr = VecSetFromOptions(ResVec);
+	ierr = VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num), &ResVec);
+
+	// ierr = VecCreate(PETSC_COMM_WORLD, &ResVec);
+	// ierr = VecSetSizes(ResVec, PETSC_DECIDE, nPoint * nTstep * (state_num * 2 + ctrl_num));
+	// ierr = VecSetFromOptions(ResVec);
 
 	PetscPrintf(PETSC_COMM_WORLD, "Initialization Done!\n");
 }
@@ -1057,6 +1106,7 @@ void TransportOpt2D::ComputeParMatrix(vector<double>& Nx, vector<array<double, d
 
 void TransportOpt2D::LocalL2Projection(int e, vector<double> w, vector<vector<double>> &u_proj)
 {
+
 	int nen, A;
 	nen = bzmesh_process[e].IEN.size();
 	int ne_disc = 4;
@@ -1086,12 +1136,13 @@ void TransportOpt2D::LocalL2Projection(int e, vector<double> w, vector<vector<do
 	Mat EM;
 	Vec Uproj, ERhs;
 
-	MatCreate(PETSC_COMM_WORLD, &EM);
-	MatSetSizes(EM, PETSC_DECIDE, PETSC_DECIDE, ne_disc, ne_disc);
+	MatCreate(PETSC_COMM_SELF, &EM);
 	MatSetType(EM, MATAIJ);
+	MatSetSizes(EM, PETSC_DECIDE, PETSC_DECIDE, ne_disc, ne_disc);
 	MatSetUp(EM);
 
-	VecCreate(PETSC_COMM_WORLD, &ERhs);
+
+	VecCreate(PETSC_COMM_SELF, &ERhs);
 	VecSetSizes(ERhs, PETSC_DECIDE, ne_disc);
 	VecSetUp(ERhs);
 	VecDuplicate(ERhs, &Uproj);
@@ -1167,7 +1218,7 @@ void TransportOpt2D::LocalL2Projection(int e, vector<double> w, vector<vector<do
 		VecAssemblyEnd(ERhs);
 
 		KSP ksp_e;
-		KSPCreate(PETSC_COMM_WORLD, &ksp_e);
+		KSPCreate(PETSC_COMM_SELF, &ksp_e);
 		KSPSetOperators(ksp_e, EM, EM);
 		KSPSolve(ksp_e, ERhs, Uproj);
 
@@ -1451,14 +1502,18 @@ void TransportOpt2D::ComputeStableMatrix_Convection2(const vector<double> w, dou
 	for (int j = 0; j < nTstep; j++)
 	{
 
-		Pe = h * sqrt(w[0] * w[0] + w[1] * w[1]) / par[0];
+		Pe = h * sqrt(w[0] * w[0] + w[1] * w[1]) / par[0] / 2.0;
 		// * LPS stabilization term
 		if (Pe < 1.0)
+		{
 			delta = 0.0;
+		}
 		else
-			delta = h / sqrt(w[0] * w[0] + w[1] * w[1]);
-
-		delta *= 1.0;
+		{
+			delta = h * h;
+			// delta = h * sqrt(w[0] * w[0] + w[1] * w[1]);
+		}
+		delta *=0.01;
 
 		for (int i = 0; i < nen; i++)
 		{
@@ -1632,14 +1687,14 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 {
 	//Build linear system in each process
 	int e;
-	cout << "Process:" << comRank << " out of " << nProcess << " Start Loop for "<< bzmesh_process.size() <<" elements.\n";
-	for (e=0;e<bzmesh_process.size();e++){
-
-		double h(1.0/30.0);
+	cout << "Process:" << comRank << " out of " << nProcess << " Start Loop for " << bzmesh_process.size() << " elements.\n";
+	for (e = 0; e < bzmesh_process.size(); e++)
+	{
+		double h(1.0 / 2.0);
 
 		int nen, A;
 		double ux_bc, uy_bc, uz_bc, p_bc;
-	
+
 		double dudx[dim][dim];
 		double detJ;
 		vector<double> Nx;
@@ -1659,18 +1714,24 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		vector<double> n0_node, nplus_node, nminus_node;
 		vector<double> vplus_node[dim], vminus_node[dim];
 		vector<double> fplus_node[dim], fminus_node[dim];
-		
-		nen = bzmesh_process[e].IEN.size();
-		
-		Nx.clear(); 		Nx.resize(nen, 0);
-		dNdx.clear(); 		dNdx.resize(nen, { 0 });
-		dN2dx2.clear(); 	dN2dx2.resize(nen, { {0} });
-		wdNdx.clear();		wdNdx.resize(nen * nTstep, 0.0);
 
-		wdNdx_proj.clear(); 	wdNdx_proj.resize(ne_disc * nTstep, 0.0);
+		nen = bzmesh_process[e].IEN.size();
+
+		Nx.clear();
+		Nx.resize(nen, 0);
+		dNdx.clear();
+		dNdx.resize(nen, {0});
+		dN2dx2.clear();
+		dN2dx2.resize(nen, {{0}});
+		wdNdx.clear();
+		wdNdx.resize(nen * nTstep, 0.0);
+
+		wdNdx_proj.clear();
+		wdNdx_proj.resize(ne_disc * nTstep, 0.0);
 		Nx_disc.clear();
 		Nx_disc.resize(ne_disc, 0);
-		dNdx_disc.clear();		dNdx_disc.resize(ne_disc, {0});
+		dNdx_disc.clear();
+		dNdx_disc.resize(ne_disc, {0});
 
 		// n0_node.clear(); n0_node.resize(nen, 0);
 		// nplus_node.clear(); nplus_node.resize(nen, 0);
@@ -1682,15 +1743,21 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		// 	fplus_node[i].clear(); fplus_node[i].resize(nen, 0);
 		// 	fminus_node[i].clear(); fminus_node[i].resize(nen, 0);
 		// }
-		
-		Mtmp.clear(); Mtmp.resize(nen);
-		Ktmp.clear(); Ktmp.resize(nen);
-		Pxtmp.clear(); Pxtmp.resize(nen);
-		Pytmp.clear(); Pytmp.resize(nen);
-		Convtmp.clear();Convtmp.resize(nen);
-		Stabletmp.clear();Stabletmp.resize(nen * nTstep);
 
-		for(int i = 0; i < nen; i++)
+		Mtmp.clear();
+		Mtmp.resize(nen);
+		Ktmp.clear();
+		Ktmp.resize(nen);
+		Pxtmp.clear();
+		Pxtmp.resize(nen);
+		Pytmp.clear();
+		Pytmp.resize(nen);
+		Convtmp.clear();
+		Convtmp.resize(nen);
+		Stabletmp.clear();
+		Stabletmp.resize(nen * nTstep);
+
+		for (int i = 0; i < nen; i++)
 		{
 			Mtmp[i].resize(nen, 0.);
 			Ktmp[i].resize(nen, 0.);
@@ -1698,17 +1765,16 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 			Pytmp[i].resize(nen, 0.);
 			Convtmp[i].resize(nen, 0.);
 		}
-		for(int i =0; i< nen * nTstep;i++)
+		for (int i = 0; i < nen * nTstep; i++)
 		{
 			Stabletmp[i].resize(nen, 0.);
 		}
 		// getchar();
 
-	    // ! Convection velocity
-		double theta = PI/6 *1.0;
-		vector<double> w = {1.0 * cos(theta), 1.0 * sin(theta)};
-
-
+		// ! Convection velocity
+		double theta = PI / 4 * 0.0;
+		double w_norm = 4.0;
+		vector<double> w = {w_norm * cos(theta), w_norm * sin(theta)};
 
 		// for (int i = 0; i < Gpt.size(); i++)
 		// {
@@ -1728,9 +1794,12 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 		// {
 		// 	wdNdx_proj[i]/=detJ_all;
 		// }
+		// cout << "Process:" << comRank << " out of " << nProcess << " Breakpoint1 for element " << ele_process[e] << ".\n";
 
 		LocalL2Projection(e, w, wdNdx_proj2);
-
+		// if (comRank == debug_rank)
+		// cout << "Process " << comRank << " Element: " << ele_process[e] << " :Start computing!\n";
+		int debug_count = 0;
 		for (int i = 0; i < Gpt.size(); i++)
 		{
 			for (int j = 0; j < Gpt.size(); j++)
@@ -1753,21 +1822,28 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 				BasisFunctionCoarseSpace(Gpt[i], Gpt[j], nen, bzmesh_process[e].pts, bzmesh_process[e].cmat, Nx_disc, dNdx_disc, detJ_disc);
 				detJ_disc = wght[i] * wght[j] * detJ;
 				ComputeStableMatrix_Convection2(w, h, wdNdx_proj2, Nx, dNdx, Nx_disc, dNdx_disc, detJ, detJ_disc, bzmesh_process[e].IEN, Stabletmp);
+				// if (comRank == debug_rank)
+				// cout << "Process " << comRank << " Element: " << ele_process[e] << " :Start assemblying!\n";
 				// ComputeResVector(val_ini, Nx, dNdx, bzmesh_process[e].IEN, detJ);
+				// cout << "Process:" << comRank << " out of " << nProcess << " Breakpoint2 for element " << ele_process[e] << " Loop count: " << debug_count << ".\n";
+
+				debug_count++;
 			}
 		}
+		// MPI_Barrier(comm);
 
 		//DebugMatVector(Stabletmp, e, work_dir + "debug/Stabletmp.txt");
-		
+
 		//Start element matrix assembly
 		MatrixAssembly(Mtmp, bzmesh_process[e].IEN, M);
 		MatrixAssembly(Ktmp, bzmesh_process[e].IEN, K);
 		MatrixAssembly(Pxtmp, bzmesh_process[e].IEN, P[0]);
 		MatrixAssembly(Pytmp, bzmesh_process[e].IEN, P[1]);
-		MatrixAssembly(Convtmp,  bzmesh_process[e].IEN, Conv);
+		MatrixAssembly(Convtmp, bzmesh_process[e].IEN, Conv);
 		StableMatAssembly(Stabletmp, bzmesh_process[e].IEN, Stable);
 		// getchar();
-	
+		// if (comRank == debug_rank)
+		// cout << "Process " << comRank << " Element: " << ele_process[e] << " :Finish assembly!\n";
 	}
 	cout << "Process " << comRank << " :complete build matrix and vector!\n";
 
@@ -1777,6 +1853,7 @@ void TransportOpt2D::BuildLinearSystemProcess(const vector<Vertex2D>& cpts, cons
 	MatAssemblyBegin(P[1], MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(Conv, MAT_FINAL_ASSEMBLY);
 	MatAssemblyBegin(Stable, MAT_FINAL_ASSEMBLY);
+	MPI_Barrier(comm);
 	// VecAssemblyBegin(Res_nl);
 }
 
@@ -1823,42 +1900,75 @@ void TransportOpt2D::BuildResVectorProcess(const vector<Vertex2D>& cpts, const v
 
 void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 {
-	
-    PetscInt row, start, end;  
-	
-	MatCreate(PETSC_COMM_WORLD, &A);
-    MatSetSizes(A,PETSC_DECIDE,PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
-    MatSetType(A,MATMPIAIJ);
-    MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
-	MatSetUp(A);
-	MatGetOwnershipRange(A,&start,&end);
-	PetscObjectSetName((PetscObject) A, "Asub11");
 
-	
-	for(row = start; row < end; row++)
+	PetscInt row, start, end;
+
+	MatCreate(PETSC_COMM_WORLD, &A);
+	MatSetSizes(A, PETSC_DECIDE, PETSC_DECIDE, state_num * nPoint * nTstep, state_num * nPoint * nTstep);
+	MatSetType(A, MATMPIAIJ);
+	MatMPIAIJSetPreallocation(A, nPoint, NULL, nPoint, NULL);
+	MatSetUp(A);
+	MatGetOwnershipRange(A, &start, &end);
+	PetscObjectSetName((PetscObject)A, "Asub11");
+
+	for (row = start; row < end; row++)
 	{
-        PetscInt ind_point, ind_var, ind_time;
+		PetscInt ind_point, ind_var, ind_time;
 		PetscReal scale;
 		PetscInt *col;
 		PetscReal *vals;
 		PetscInt ncols_m, ncols_k;
-		const PetscReal *vals_m, *vals_k;	
+		const PetscReal *vals_m, *vals_k;
 		const PetscInt *cols_m, *cols_k;
 		PetscInt ncols_a;
 
 		GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
-		MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
-		MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
 
-		// cout << "Ncols_k: " << ncols_k <<endl;
-		// for(int i =0;i<ncols_k;i++)
-		// 	cout << "Col: "<< cols_k[i] << " Value: " << vals_k[i] <<endl;
-		// cout << "Ncols_m: " << ncols_m <<endl;
-		// for(int i =0;i<ncols_m;i++)
-		// 	cout << "Col: "<< cols_m[i] << " Value: " << vals_m[i] <<endl;
+		IS is_row, is_col;
+		IS *is_row_array, *is_col_array;
+		Mat *Msub, *Ksub;
 
-		// cout << "Output M_row, K_row Done!\n";
-		
+		PetscMalloc1(1, &is_row_array);
+		PetscMalloc1(1, &is_col_array);
+		PetscMalloc1(1, &Msub);
+		PetscMalloc1(1, &Ksub);
+		ISCreateStride(PETSC_COMM_SELF, 1, ind_point, 1, &is_row);
+		ISCreateStride(PETSC_COMM_SELF, nPoint, 0, 1, &is_col);
+		is_row_array[0] = is_row;
+		is_col_array[0] = is_col;
+
+		MatCreateSubMatrices(M, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Msub);
+		MatCreateSubMatrices(K, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Ksub);
+		// // if (row == start && comRank == debug_rank)
+		// 	if (comRank == debug_rank)
+
+		// 	{
+		// 		DebugVisualizeISSelf(is_row, work_dir + "debug/is_row.m");
+		// 		DebugVisualizeISSelf(is_col, work_dir + "debug/is_col.m");
+		// 		DebugVisualizeMatSelf(Msub[0], work_dir + "debug/Msub1.m");
+		// 		cout << "Process:" << comRank << " out of " << nProcess << " Output debug info.\n";
+		// }
+		// cout << "Process:" << comRank << " out of " << nProcess << " Breakpoint1.\n";
+
+		MatGetRow(Ksub[0], 0, &ncols_k, &cols_k, &vals_k);
+		MatGetRow(Msub[0], 0, &ncols_m, &cols_m, &vals_m);
+		// cout << "Process:" << comRank << " out of " << nProcess << " Breakpoint2.\n";
+
+		// MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
+		// MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+		// if (row == start && comRank == debug_rank)
+		// 	if ( comRank == debug_rank)
+		// 	{
+		// 		cout << "Ncols_k: " << ncols_k << endl;
+		// 		for (int i = 0; i < ncols_k; i++)
+		// 			cout << "Col: " << cols_k[i] << " Value: " << vals_k[i] << endl;
+		// 		cout << "Ncols_m: " << ncols_m << endl;
+		// 		for (int i = 0; i < ncols_m; i++)
+		// 			cout << "Col: " << cols_m[i] << " Value: " << vals_m[i] << endl;
+
+		// 		cout << "Output M_row, K_row Done!\n";
+		// }
+		// getchar();
 		switch (ind_var)
 		{
 		case 0:
@@ -1866,7 +1976,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
 			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
+			for (int i = 0; i < ncols_a; i++)
 			{
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
@@ -1879,7 +1989,7 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 			ncols_a = ncols_m;
 			PetscMalloc1(ncols_a, &col);
 			PetscMalloc1(ncols_a, &vals);
-			for(int i = 0; i < ncols_a; i++)
+			for (int i = 0; i < ncols_a; i++)
 			{
 				vals[i] = vals_m[i];
 				col[i] = cols_m[i] + ind_var * nPoint + ind_time * nPoint * state_num;
@@ -1893,49 +2003,59 @@ void TransportOpt2D::FormMatrixA11(Mat M, Mat K, Mat &A)
 		// 	scale = scale * 0.5 * dt;
 		// else
 		// 	scale = scale * dt;
-		switch(time_int)
+		switch (time_int)
 		{
-			case 0:
-				// !steady state
-				scale = 1.0;
-				break;
-			case 1:
-				// !trapezoidal rule
-				if(ind_time == 0 || ind_time == (nTstep - 1))
-					scale = 0.5 * dt;
-				else
-					scale = dt;
-				break;
-			case 2:
-				// !rectangle rule
-				if(ind_time == (nTstep - 1))
-					scale = 0.0;
-				else
-					scale = dt;
-				break;
+		case 0:
+			// !steady state
+			scale = 1.0;
+			break;
+		case 1:
+			// !trapezoidal rule
+			if (ind_time == 0 || ind_time == (nTstep - 1))
+				scale = 0.5 * dt;
+			else
+				scale = dt;
+			break;
+		case 2:
+			// !rectangle rule
+			if (ind_time == (nTstep - 1))
+				scale = 0.0;
+			else
+				scale = dt;
+			break;
 		}
-		
-		for(int i = 0; i < ncols_a; i++)
+
+		for (int i = 0; i < ncols_a; i++)
 		{
-			vals[i] = vals[i]*scale;
+			vals[i] = vals[i] * scale;
 		}
 		// for(int i = 0; i < nPoint; i++)
 		// {
 		// 	vals[i] = vals[i]*scale;
 		// 	col[i] = i + ind_var * nPoint + ind_time * nPoint * state_num;
 		// }
-			
+
 		MatSetValues(A, 1, &row, ncols_a, col, vals, INSERT_VALUES);
 
 		// MatSetValues(A, 1, &row, nPoint, col, vals, INSERT_VALUES);
 
 		// if(ind_var>=3)
-			MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		// MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
 		// else if(ind_var>0)
-			MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
-			
+		// MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
+
+		MatRestoreRow(Msub[0], 0, NULL, NULL, &vals_m);
+		// else if(ind_var>0)
+		MatRestoreRow(Ksub[0], 0, NULL, NULL, &vals_k);
 	}
-	
+
+	// ISDestroy(&is_row);
+	// ISDestroy(&is_col);
+
+	// PetscFree(is_row_array);
+	// PetscFree(is_col_array);
+	// PetscFree(Msub);
+	// PetscFree(Ksub);
 }
 
 void TransportOpt2D::FormMatrixA12(Mat M, Mat K, Mat &A)
@@ -2147,7 +2267,11 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
 	MatSetUp(A);
 	PetscObjectSetName((PetscObject) A, "Asub22");
 	MatGetOwnershipRange(A,&start,&end);
-	
+
+	// IS is_row, is_col;
+	// Mat Msub;
+
+
 	for(row = start; row < end; row++)
 	{
         PetscInt ind_point, ind_var, ind_time;
@@ -2159,7 +2283,23 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
 		const PetscInt *cols_m;
 
 		GetMatrixPosition(row, ctrl_num, ind_point, ind_var, ind_time);
-		MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+		// MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+
+		IS is_row, is_col;
+		IS *is_row_array, *is_col_array;
+		Mat *Msub;
+
+		PetscMalloc1(1, &is_row_array);
+		PetscMalloc1(1, &is_col_array);
+		PetscMalloc1(1, &Msub);
+
+		ISCreateStride(PETSC_COMM_SELF, 1, ind_point, 1, &is_row);
+		ISCreateStride(PETSC_COMM_SELF, nPoint, 0, 1, &is_col);
+		is_row_array[0] = is_row;
+		is_col_array[0] = is_col;
+
+		MatCreateSubMatrices(M, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Msub);
+		MatGetRow(Msub[0], 0, &ncols_m, &cols_m, &vals_m);
 		PetscMalloc1(ncols_m, &col);
 		PetscMalloc1(ncols_m, &vals);
 		
@@ -2214,9 +2354,10 @@ void TransportOpt2D::FormMatrixA22(Mat M, Mat K, Mat &A)
 		// 	cout << "Col: "<< col[i] << " Value: " << vals[i] <<endl;
 
 		MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
-		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		// MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		MatRestoreRow(Msub[0], 0, NULL, NULL, &vals_m);
 	}
-
+	// MatDestroy(&Msub);
 }
 
 void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
@@ -2230,7 +2371,11 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 	MatSetUp(A);
 	PetscObjectSetName((PetscObject) A, "Asub23");
 	MatGetOwnershipRange(A,&start,&end);
-	
+
+	// IS is_row, is_col;
+	// Mat Msub;
+
+
 	for(row = start; row < end; row++)
 	{
         PetscInt ind_point, ind_var, ind_time;
@@ -2242,7 +2387,29 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 		const PetscInt *cols_m;
 
 		GetMatrixPosition(row, ctrl_num, ind_point, ind_var, ind_time);
-		MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+		// MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+
+		IS is_row, is_col;
+		IS *is_row_array, *is_col_array;
+		Mat *Msub;
+
+		PetscMalloc1(1, &is_row_array);
+		PetscMalloc1(1, &is_col_array);
+		PetscMalloc1(1, &Msub);
+
+		ISCreateStride(PETSC_COMM_SELF, 1, ind_point, 1, &is_row);
+		ISCreateStride(PETSC_COMM_SELF, nPoint, 0, 1, &is_col);
+		is_row_array[0] = is_row;
+		is_col_array[0] = is_col;
+
+		MatCreateSubMatrices(M, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Msub);
+		MatGetRow(Msub[0], 0, &ncols_m, &cols_m, &vals_m);
+
+		// ISCreateStride(PETSC_COMM_WORLD, 1, ind_point, 0, &is_row);
+		// ISCreateStride(PETSC_COMM_WORLD, nPoint, 0, 1, &is_col);
+		// MatCreateSubMatrix(M, is_row, is_col, MAT_INITIAL_MATRIX, &Msub);
+		// MatGetRow(Msub, 0, &ncols_m, &cols_m, &vals_m);
+
 		PetscMalloc1(ncols_m, &col);
 		PetscMalloc1(ncols_m, &vals);
 
@@ -2271,17 +2438,11 @@ void TransportOpt2D::FormMatrixA23(Mat M, Mat K, Mat &A)
 			
 		MatSetValues(A, 1, &row, ncols_m, col, vals, INSERT_VALUES);
 
-		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		// MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		MatRestoreRow(Msub[0], 0, NULL, NULL, &vals_m);
 	}
-
-	// PetscFree(col);
-	// PetscFree(vals);
-
-	// delete col;
-	// delete vals;
-	// delete vals_m;
+	// MatDestroy(&Msub);
 }
-
 
 void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 {
@@ -2295,7 +2456,12 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 	MatSetUp(A);
 	PetscObjectSetName((PetscObject) A, "Asub31");
 	MatGetOwnershipRange(A,&start,&end);
-	
+
+	IS is_row, is_col;
+	Mat Msub, Ksub, Pxsub, Pysub, Convsub;
+
+
+
 	for(row = start; row < end; row++)
 	{
         PetscInt ind_point, ind_var, ind_time;
@@ -2310,12 +2476,49 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		// cout << "Output M_row, K_row Done!\n";
 
 		GetMatrixPosition(row, state_num, ind_point, ind_var, ind_time);
-		MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
-		MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
-		MatGetRow(P[0],ind_point,&ncols_px, &cols_px,&vals_px);
-		MatGetRow(P[1],ind_point,&ncols_py, &cols_py,&vals_py);
+		// MatGetRow(M,ind_point,&ncols_m, &cols_m,&vals_m);
+		// MatGetRow(K,ind_point,&ncols_k, &cols_k,&vals_k);
+		// MatGetRow(P[0],ind_point,&ncols_px, &cols_px,&vals_px);
+		// MatGetRow(P[1],ind_point,&ncols_py, &cols_py,&vals_py);
+		// // ! Get Convection matrix
+		// MatGetRow(Conv,ind_point,&ncols_conv, &cols_conv,&vals_conv);
+		IS is_row, is_col;
+		IS *is_row_array, *is_col_array;
+		Mat *Msub, *Ksub, *Pxsub, *Pysub, *Convsub;
+
+		PetscMalloc1(1, &is_row_array);
+		PetscMalloc1(1, &is_col_array);
+		PetscMalloc1(1, &Msub);
+		PetscMalloc1(1, &Ksub);
+		PetscMalloc1(1, &Pxsub);
+		PetscMalloc1(1, &Pysub);
+		PetscMalloc1(1, &Convsub);
+
+		ISCreateStride(PETSC_COMM_SELF, 1, ind_point, 1, &is_row);
+		ISCreateStride(PETSC_COMM_SELF, nPoint, 0, 1, &is_col);
+		is_row_array[0] = is_row;
+		is_col_array[0] = is_col;
+
+		MatCreateSubMatrices(M, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Msub);
+		MatCreateSubMatrices(K, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Ksub);
+		MatCreateSubMatrices(P[0], 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Pxsub);
+		MatCreateSubMatrices(P[1], 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Pysub);
+		MatCreateSubMatrices(Conv, 1, is_row_array, is_col_array, MAT_INITIAL_MATRIX, &Convsub);
+
+		// ISCreateStride(PETSC_COMM_WORLD, 1, ind_point, 0, &is_row);
+		// ISCreateStride(PETSC_COMM_WORLD, nPoint, 0, 1, &is_col);
+		// MatCreateSubMatrix(M, is_row, is_col, MAT_INITIAL_MATRIX, &Msub);
+		// MatCreateSubMatrix(K, is_row, is_col, MAT_INITIAL_MATRIX, &Ksub);
+		// MatCreateSubMatrix(P[0], is_row, is_col, MAT_INITIAL_MATRIX, &Pxsub);
+		// MatCreateSubMatrix(P[1], is_row, is_col, MAT_INITIAL_MATRIX, &Pysub);
+		// MatCreateSubMatrix(Conv, is_row, is_col, MAT_INITIAL_MATRIX, &Convsub);
+
+		MatGetRow(Msub[0], 0, &ncols_m, &cols_m, &vals_m);
+		MatGetRow(Ksub[0], 0, &ncols_k, &cols_k, &vals_k);
+		MatGetRow(Pxsub[0], 0, &ncols_px, &cols_px, &vals_px);
+		MatGetRow(Pysub[0], 0, &ncols_py, &cols_py, &vals_py);
 		// ! Get Convection matrix
-		MatGetRow(Conv,ind_point,&ncols_conv, &cols_conv,&vals_conv);
+		MatGetRow(Convsub[0], 0, &ncols_conv, &cols_conv, &vals_conv);
 
 		// cout << "Ncols_k: " << ncols_k <<endl;
 		// for(int i =0;i<ncols_k;i++)
@@ -2403,12 +2606,22 @@ void TransportOpt2D::FormMatrixA31(Mat M, Mat K, Mat P[dim], Mat &A)
 		}
 		
 		
-		MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
-		MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
-		MatRestoreRow(P[0],ind_point,NULL,NULL,&vals_px);
-		MatRestoreRow(P[1],ind_point,NULL,NULL,&vals_py);
-		MatRestoreRow(Conv,ind_point,NULL,NULL,&vals_conv);
+		// MatRestoreRow(M,ind_point,NULL,NULL,&vals_m);
+		// MatRestoreRow(K,ind_point,NULL,NULL,&vals_k);
+		// MatRestoreRow(P[0],ind_point,NULL,NULL,&vals_px);
+		// MatRestoreRow(P[1],ind_point,NULL,NULL,&vals_py);
+		// MatRestoreRow(Conv,ind_point,NULL,NULL,&vals_conv);
+		MatRestoreRow(Msub[0], 0, NULL, NULL, &vals_m);
+		MatRestoreRow(Ksub[0], 0, NULL, NULL, &vals_k);
+		MatRestoreRow(Pxsub[0], 0, NULL, NULL, &vals_px);
+		MatRestoreRow(Pysub[0], 0, NULL, NULL, &vals_py);
+		MatRestoreRow(Convsub[0], 0, NULL, NULL, &vals_conv);
 	}
+	// MatDestroy(&Msub);
+	// MatDestroy(&Ksub);
+	// MatDestroy(&Pxsub);
+	// MatDestroy(&Pysub);
+	// MatDestroy(&Convsub);
 	// delete col, vals;
 	// delete vals_m, vals_k, vals_px, vals_py;
 }
@@ -2629,6 +2842,8 @@ void TransportOpt2D::TangentMatSetup()
 	MatAssemblyBegin(Asubmat[0], MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Asubmat[0], MAT_FINAL_ASSEMBLY);
 
+	cout << "Finish A11\n.";
+
 	// DebugVisualizeMat(Asubmat[0], work_dir + "debug/matA11.m");
 
 	// A12 & A21 // No problem
@@ -2802,6 +3017,8 @@ void TransportOpt2D::ResidualVecSetup(Vec x)
 	FormResVecb3(x);
 	DebugVisualizeVec(bsub[2],  work_dir + "debug/VecB3.m");
 
+	cout << "Compute bsub Done!\n";
+	getchar();
 	PetscInt low, high, ldim, iglobal, i, k;
 	PetscReal val, *array;
 	PetscInt shift[3] = {0, state_num * nTstep * nPoint, (state_num + ctrl_num) * nTstep * nPoint};
@@ -2897,7 +3114,11 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 
 	ReadBezierElementProcess(ctx -> work_dir);
 
-	PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");	
+	// VisualizeVTK_ControlMesh_Heat(ctx->pts, ctx->mesh, 0 ,999 + comRank, work_dir + "debug/");
+	// cout << "Ouput control mesh for rank: " << comRank << "\n";
+	// getchar();
+
+	PetscPrintf(PETSC_COMM_WORLD, "Building Unit Matrix...\n");
 	t0 = time(NULL);
 
 	MatZeroEntries(M);
@@ -2916,9 +3137,11 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 	MatAssemblyEnd(Conv, MAT_FINAL_ASSEMBLY);
 	MatAssemblyEnd(Stable, MAT_FINAL_ASSEMBLY);
 
+	// DebugVisualizeMat(M,  work_dir + "debug/MMat.m");
+
 	t1 = time(NULL);
 	PetscPrintf(PETSC_COMM_WORLD, "Done Unit Matrix Assembly with time: %d...\n", t1 - t0);
-
+	MPI_Barrier(comm);
 	// PetscPrintf(PETSC_COMM_WORLD, "Building Linear System...\n");
 	// t0 = time(NULL);
 	// TangentMatSetup();
@@ -2971,10 +3194,13 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		t1 = time(NULL);
 		PetscPrintf(PETSC_COMM_WORLD, "Done Matrix Assembly with time: %d \n", t1 - t0);
 
+		MPI_Barrier(comm);
 		t0 = time(NULL);
 		VecSet(Res_nl, 0.0);
 		BuildResVectorProcess(ctx->pts, ctx->val_bc, ctx->val_ini);
 		VecAssemblyEnd(Res_nl);
+
+		getchar();
 
 		// DebugVisualizeMat(M,  work_dir + "debug/MMat.m");
 		// DebugVisualizeMat(K,  work_dir + "debug/KMat.m");
@@ -2983,10 +3209,13 @@ void TransportOpt2D::Run(const UserSetting2D *ctx)
 		DebugVisualizeMat(Conv, work_dir + "debug/ConvMat.m");
 
 		ResidualVecSetup(X);
+		MPI_Barrier(comm);
+		getchar();
+
 		//! Apply BC:Modify for stabilization method
 		ApplyBoundaryCondition(ctx, l);
 		// ApplyBoundaryCondition(ctx, 0);
-
+		getchar();
 		// DebugSubMat();
 		// DebugVisualizeMat(PCMat,  work_dir + "debug/PCMat.m");
 		// DebugVisualizeMat(TanMat,  work_dir + "debug/TanMat_afterBC.m");
@@ -3473,8 +3702,8 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 	vector<double> sresult_all;
 	vector<array<int, 4>> sele_all;
 
-	const int ns_ele = 9;
-	const int ns_pt = 16;
+	const int ns_ele = 16;
+	const int ns_pt = 25;
 	double detJ;
 	int num_bzmesh_ele = bzmesh_process.size();
 	double spt_proc[num_bzmesh_ele * ns_pt * 3];
@@ -3483,7 +3712,7 @@ void TransportOpt2D::VisualizeVTK_PhysicalDomain(int time, int step, string fn)
 	cout << "num_bzmesh_ele: " << num_bzmesh_ele << "\n";
 	for (unsigned int e = 0; e < num_bzmesh_ele; e++)
 	{
-		int ns(4);
+		int ns(5);
 		vector<double> su(ns);
 		for (int i = 0; i < ns; i++)
 		{
