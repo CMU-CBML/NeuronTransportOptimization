@@ -10,7 +10,7 @@ Element2D::Element2D(int p)
 {
 	degree = p;
 	order = p + 1;
-	nbf = order*order*order;
+	nbf = order*order;
 	IEN.resize(4);
 	pts.resize(4);
 	for (int i = 0; i < 4; i++)

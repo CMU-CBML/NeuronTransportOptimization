@@ -37,6 +37,22 @@ void UserSetting2D::InitializeUserSetting(string path)
 
 }
 
+void UserSetting2D::DesireStateFunction(double x, double y, double z, double t, double result[state_num]) const
+{
+	for (int i = 0; i < state_num;i++)
+		result[i] = 0;
+
+	// ! One pipe desire function
+	// result[0] = 3.0 / 50.0 * x * x - 4.0 / 5.0 * x + 3.0;
+	// result[0] = exp(-x / var[0]) - 0.1 * x + 2.0;
+
+	// ! Convection desire function
+	if (x <= 0.5 && y <= 0.5)
+	{
+		result[0] = pow(2 * x - 1.0, 2) * pow(2 * y - 1.0, 2);
+	}
+}
+
 void UserSetting2D::SetVariables(string fn_par)
 {
 	var.resize(21);
@@ -61,7 +77,7 @@ void UserSetting2D::SetVariables(string fn_par)
 void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 {
 	int i, j;
-	for (i = 0; i < STATE_NUM; i++)
+	for (i = 0; i < state_num; i++)
 		val_ini[i].resize(pts.size());
 
 	if (ReadIC)
@@ -74,7 +90,7 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < STATE_NUM; i++)
+				for (i = 0; i < state_num; i++)
 				{
 					fin >> stmp >> val_ini[i][j];
 				}
@@ -97,7 +113,7 @@ void UserSetting2D::SetInitialCondition(string fn_in, string fn_out)
 			// }
 			// else
 			// {
-			// 	for(j = 0;j<STATE_NUM;j++)
+			// 	for(j = 0;j<state_num;j++)
 			// 	{
 			// 		val_ini[j][i] = 0.0;
 			// 	}
@@ -126,7 +142,7 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < STATE_NUM; i++)
+				for (i = 0; i < state_num; i++)
 				{
 					fin >> stmp >> val_bc[i][j];
 				}
@@ -197,102 +213,108 @@ void UserSetting2D::SetBoundaryCondition(string fn_in,  string fn_out)
 		// 	count++;
 		// }
 		// ! Convection test
-		// for (i = 0; i < pts.size(); i++)
-		// {
-		// 	if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
-		// 	//if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps )
-		// 	{
-		// 		bc_flag[i] = -1;
-		// 		// if (abs(pts[i].coor[1] - 1.0) < eps || ((pts[i].coor[1] > 0.5) && (pts[i].coor[1] < 1.0) && abs(pts[i].coor[0] - 0.0) < eps))
-		// 		// {
-		// 		// 	/// Concentration
-		// 		// 	val_bc[0][i] = 1.0;			
-		// 		// 	continue;
-		// 		// }
-		// 		// else
-		// 		// {
-		// 		// 	val_bc[0][i] = 0.0;
-		// 		// 	continue;
-		// 		// }
-		// 		// test 2
-		// 		double x1 = pts[i].coor[0];
-		// 		double x2 = pts[i].coor[1];
-		// 		if (x1 <= 0.5 && x2 <= 0.5)
-		// 		{
-		// 			val_bc[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
-		// 		}
-		// 		// if (x1>0. && x1 <= 0.5 && abs(x2 - 0.0) < eps)
-		// 		// {
-		// 		// 	val_bc[0][i] = 1.0;
-		// 		// }
-		// 		continue;
-		// 	}
-		// 	bc_flag[i] = count;
-		// 	count++;
-		// }
-		// ! Single pipe model
-		eps = 0.5;
 		for (i = 0; i < pts.size(); i++)
 		{
-			double vmax = 0.0, vx = 0.0, vy = 0.0;
-			vmax = var[1] * (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
-			vx = vmax * (1.0 - (pts[i].coor[1] / 0.5) * (pts[i].coor[1] / 0.5));
-			if (abs(pts[i].coor[0] - 0.0) < eps)
+			if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps || abs(pts[i].coor[1] - 1.0) < eps)
+			//if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 1.0) < eps || abs(pts[i].coor[1] - 0.0) < eps )
 			{
-				// * simple test
-				val_bc[0][i] = 3.0;
-
-				///// Concentration
-				//val_bc[0][i] = 1.0;
-				//val_bc[1][i] = 2.0;
-				//val_bc[2][i] = 0.0;
-				///// v+
-				//val_bc[3][i] = vx;
-				//val_bc[4][i] = vy;
-				//// val_bc[3][i] = 1.0;
-				//// val_bc[4][i] = 0.0;
-				///// v-
-				////val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
-
-				///bc_flag
 				bc_flag[i] = -1;
+				// if (abs(pts[i].coor[1] - 1.0) < eps || ((pts[i].coor[1] > 0.5) && (pts[i].coor[1] < 1.0) && abs(pts[i].coor[0] - 0.0) < eps))
+				// {
+				// 	/// Concentration
+				// 	val_bc[0][i] = 1.0;			
+				// 	continue;
+				// }
+				// else
+				// {
+				// 	val_bc[0][i] = 0.0;
+				// 	continue;
+				// }
+				// test 2
+				double x1 = pts[i].coor[0];
+				double x2 = pts[i].coor[1];
+				if (x1 <= 0.5 && x2 <= 0.5)
+				{
+					val_bc[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
+				}
+				// if (x1>0. && x1 <= 0.5 && abs(x2 - 0.0) < eps)
+				// {
+				// 	val_bc[0][i] = 1.0;
+				// }
 				continue;
 			}
-			else if (abs(pts[i].coor[0] - 10.0) < eps)
-			{
-				// * simple test
-				val_bc[0][i] = 1.0;
-
-				// /// Concentration
-				// val_bc[0][i] = 1.0;
-				// val_bc[1][i] = 0.0;
-				// val_bc[2][i] = 2.0;
-				// /// v+
-				// //val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
-				// /// v-
-				// // val_bc[5][i] = -1.0;
-				// // val_bc[6][i] = 0.0;
-				// val_bc[5][i] = -vx;
-				// val_bc[6][i] = vy;
-				bc_flag[i] = -1; // ! Flag is changed
-				continue;
-			}
-			// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
-			// {
-			// 	/// Concentration
-			// 	//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
-			// 	/// v+
-			// 	val_bc[3][i] = 0.0;
-			// 	val_bc[4][i] = 0.0;
-			// 	/// v-
-			// 	val_bc[5][i] = 0.0;
-			// 	val_bc[6][i] = 0.0;
-			// 	bc_flag[i] = -3;
-			// 	continue;
-			// }
 			bc_flag[i] = count;
 			count++;
 		}
+		// ! Single pipe model
+		// eps = 1e-6;
+		// for (i = 0; i < pts.size(); i++)
+		// {
+		// 	double vmax = 0.0, vx = 0.0, vy = 0.0;
+		// 	vmax = var[1] * (pts[i].coor[0] - 5.0) * (pts[i].coor[0] - 5.0) / 25.0;
+		// 	vx = vmax * (1.0 - (pts[i].coor[1] / 0.5) * (pts[i].coor[1] / 0.5));
+		// 	if (abs(pts[i].coor[0] - 0.0) < eps)
+		// 	{
+		// 		// * simple test
+		// 		val_bc[0][i] = 3.0;
+
+		// 		///// Concentration
+		// 		//val_bc[0][i] = 1.0;
+		// 		//val_bc[1][i] = 2.0;
+		// 		//val_bc[2][i] = 0.0;
+		// 		///// v+
+		// 		//val_bc[3][i] = vx;
+		// 		//val_bc[4][i] = vy;
+		// 		//// val_bc[3][i] = 1.0;
+		// 		//// val_bc[4][i] = 0.0;
+		// 		///// v-
+		// 		////val_bc[5][i] = -1.0;		val_bc[6][i] = 0.0;
+
+		// 		///bc_flag
+		// 		bc_flag[i] = -1;
+		// 		continue;
+		// 	}
+		// 	else if (abs(pts[i].coor[0] - 10.0) < eps)
+		// 	{
+		// 		// * simple test
+		// 		val_bc[0][i] = 1.0;
+
+		// 		// /// Concentration
+		// 		// val_bc[0][i] = 1.0;
+		// 		// val_bc[1][i] = 0.0;
+		// 		// val_bc[2][i] = 2.0;
+		// 		// /// v+
+		// 		// //val_bc[3][i] = 1.0;			val_bc[4][i] = 0.0;
+		// 		// /// v-
+		// 		// // val_bc[5][i] = -1.0;
+		// 		// // val_bc[6][i] = 0.0;
+		// 		// val_bc[5][i] = -vx;
+		// 		// val_bc[6][i] = vy;
+		// 		bc_flag[i] = -1; // ! Flag is changed
+		// 		continue;
+		// 	}
+		// 	// if (abs(pts[i].coor[0] - 0.0) < eps || abs(pts[i].coor[0] - 10.0) < eps || abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+		// 	// {
+		// 	// 	bc_flag[i] = -1;
+		// 	// 	val_bc[0][i] = exp(-pts[i].coor[0] - 0.0 / var[0]) - 0.1 * pts[i].coor[0] - 0.0 + 2.0;
+		// 	// 	continue;
+		// 	// }
+		// 	// else if (abs(pts[i].coor[1] - 0.5) < eps || abs(pts[i].coor[1] + 0.5) < eps)
+		// 	// {
+		// 	// 	/// Concentration
+		// 	// 	//	val_bc[0][i] = 1.0;			val_bc[1][i] = 0.0;			val_bc[2][i] = 2.0;
+		// 	// 	/// v+
+		// 	// 	val_bc[3][i] = 0.0;
+		// 	// 	val_bc[4][i] = 0.0;
+		// 	// 	/// v-
+		// 	// 	val_bc[5][i] = 0.0;
+		// 	// 	val_bc[6][i] = 0.0;
+		// 	// 	bc_flag[i] = -3;
+		// 	// 	continue;
+		// 	// }
+		// 	bc_flag[i] = count;
+		// 	count++;
+		// }
 		TXTWriteBC(fn_in);
 	}
 
@@ -333,7 +355,7 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 		{
 			for (j = 0; j < pts.size(); j++)
 			{
-				for (i = 0; i < STATE_NUM; i++)
+				for (i = 0; i < state_num; i++)
 				{
 					fin >> stmp >> val_desire[i][j];
 				}
@@ -349,57 +371,57 @@ void UserSetting2D::SetDesireState(string fn_in,  string fn_out)
 	{
 		/// For one pipe
 		double eps(1e-6);
-		// double c1 = 0.40, c2 = 0.60;
-		// for (i = 0; i < pts.size(); i++)
-		// {
-		// 	double x1 = pts[i].coor[0];
-		// 	double x2 = pts[i].coor[1];
+		double c1 = 0.40, c2 = 0.60;
+		for (i = 0; i < pts.size(); i++)
+		{
+			double x1 = pts[i].coor[0];
+			double x2 = pts[i].coor[1];
 
-		// 	if ((pts[i].coor[0] >= c1 & pts[i].coor[0] <= c2) || (pts[i].coor[1] >= c1 & pts[i].coor[1] <= c2))
-		// 	{
-		// 		val_desire[0][i] = - pts[i].coor[0] * exp( - (pts[i].coor[0]-0.5)*(pts[i].coor[0]-0.5) - (pts[i].coor[1]-0.5)*(pts[i].coor[1]-0.5));
-		// 	}
-		// 	else
-		// 	{
-		// 		for(j = 0;j<STATE_NUM;j++)
-		// 		{
-		// 			val_desire[j][i] = 0.0;
-		// 		}
-		// 	}
+			if ((pts[i].coor[0] >= c1 & pts[i].coor[0] <= c2) || (pts[i].coor[1] >= c1 & pts[i].coor[1] <= c2))
+			{
+				val_desire[0][i] = - pts[i].coor[0] * exp( - (pts[i].coor[0]-0.5)*(pts[i].coor[0]-0.5) - (pts[i].coor[1]-0.5)*(pts[i].coor[1]-0.5));
+			}
+			else
+			{
+				for(j = 0;j<state_num;j++)
+				{
+					val_desire[j][i] = 0.0;
+				}
+			}
 
-		// 	if((pts[i].coor[0] >=  0 & pts[i].coor[0] <= 0.5) && (pts[i].coor[1] >=  0 & pts[i].coor[1] <= 0.5))
-		// 	{
-		// 		val_desire[0][i] = 1.0;
-		// 	}
-		// 	else
-		// 	{
-		// 		for(j = 0;j<STATE_NUM;j++)
-		// 		{
-		// 			val_desire[j][i] = 0.0;
-		// 		}
-		// 	}
+			if((pts[i].coor[0] >=  0 & pts[i].coor[0] <= 0.5) && (pts[i].coor[1] >=  0 & pts[i].coor[1] <= 0.5))
+			{
+				val_desire[0][i] = 1.0;
+			}
+			else
+			{
+				for(j = 0;j<state_num;j++)
+				{
+					val_desire[j][i] = 0.0;
+				}
+			}
 
 
-		// 	//val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
-		// 	//  val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
+			//val_desire[0][i]= pts[i].coor[0]* (1.0 - pts[i].coor[0])* exp(-pts[i].coor[0]) * pts[i].coor[1]* (1.0 - pts[i].coor[1])* exp(-pts[i].coor[1]);
+			//  val_desire[0][i]=- pts[i].coor[0] *exp(-pow( pts[i].coor[0] - 0.5,2)-pow( pts[i].coor[1]-0.5,2));
 
-		// 	for(j = 0;j<STATE_NUM;j++)
-		// 	{
-		// 		val_desire[j][i] = 0.0;
-		// 	}
-		// 	if(x1<=0.5 && x2<=0.5)
-		// 	{
-		// 		val_desire[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
-		// 	}
-		// 	// if (x1>0 && x1 <= 0.5 )
-		// 	// {
-		// 	// 	val_desire[0][i] = 1.0;
-		// 	// }
-		// 	// for (j = 0; j < STATE_NUM; j++)
-		// 	// {
-		// 	// 	val_desire[j][i] = 0.0;
-		// 	// }
-		// }
+			for(j = 0;j<state_num;j++)
+			{
+				val_desire[j][i] = 0.0;
+			}
+			if(x1<=0.5 && x2<=0.5)
+			{
+				val_desire[0][i] = pow(2 * x1 - 1.0, 2) * pow(2 * x2 - 1.0, 2);
+			}
+			// if (x1>0 && x1 <= 0.5 )
+			// {
+			// 	val_desire[0][i] = 1.0;
+			// }
+			// for (j = 0; j < state_num; j++)
+			// {
+			// 	val_desire[j][i] = 0.0;
+			// }
+		}
 		//! For one pipe
 		for (i = 0; i < pts.size(); i++)
 		{
@@ -431,7 +453,7 @@ void UserSetting2D::TXTWriteIC(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < STATE_NUM; i++)
+			for (i = 0; i < state_num; i++)
 			{
 
 				if (i == 1)
@@ -462,7 +484,7 @@ void UserSetting2D::TXTWriteBC(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < STATE_NUM; i++)
+			for (i = 0; i < state_num; i++)
 			{
 				fout << val_bc[i][j] << " ";
 				// if (i == 6)
@@ -494,7 +516,7 @@ void UserSetting2D::TXTWriteDesire(string fn_out)
 	{
 		for (j = 0; j < pts.size(); j++)
 		{
-			for (i = 0; i < STATE_NUM; i++)
+			for (i = 0; i < state_num; i++)
 			{
 				if(i!=1)
 					fout << val_desire[i][j] << " ";
@@ -721,139 +743,7 @@ void UserSetting2D::ReadMesh(string fn)
 	}
 }
 
-void UserSetting2D::ReadVelocityField(string fn)
-{
-	
-}
-
 void UserSetting2D::AssignProcessor(string fn)
-{
-	int tmp;
-	int i = 0;
-	string fname(fn);
-	ifstream fin;
-	fin.open(fname, ios::in);
-	if (fin.is_open())
-	{
-		while(!fin.eof() && fin.peek() != EOF)
-		{
-			fin >> tmp;
-			ele_process[tmp].push_back(i);
-			i++;
-			fin.get();
-		}
-		n_bzmesh = i;
-		PetscPrintf(PETSC_COMM_WORLD, "Mesh partition finished!\n");
-		fin.close();
-	}
-	else
-	{
-		PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
-	}
-}
-
-
-void UserSetting2D::SetVariables(string fn_par, vector<double>& var)
-{
-	var.resize(21);
-	string fname(fn_par), stmp;
-	stringstream ss;
-	ifstream fin;
-	fin.open(fname);
-	if (fin.is_open())
-	{
-		for (int i = 0; i < 21; i++)
-		{
-			fin >> stmp >> var[i];
-		}	
-		fin.close();
-	}	
-	else
-	{
-		PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
-	}
-	//double var0[2] = { 1.0,0.5 };	//nu, rou
-	//var.clear();
-	//var.resize(2);
-	//var.assign(var0, var0 + 2);
-}
-
-void UserSetting2D::SetInitialCondition(int ndof, vector<double>& Vel0, vector<double>& Pre0, vector<Vertex2D>& pts, const vector<array<double,2>> velocity_node)
-{
-	double val_ini[2] = { 0.0,0.0 };//Vel0, Pre0
-	Vel0.clear();
-	Pre0.clear();
-	Vel0.resize(ndof * 2, val_ini[0]);
-	Pre0.resize(ndof, val_ini[1]);
-}
-
-void UserSetting2D::ReadMesh(string fn, vector<Vertex2D>& pts, vector<Element2D>& mesh)
-{
-	string fname(fn), stmp;
-	int npts, neles, itmp;
-	double dtmp;
-	ifstream fin;
-	fin.open(fname);
-	if (fin.is_open())
-	{
-		for (int i = 0; i < 4; i++) getline(fin, stmp);//skip lines
-		fin >> stmp >> npts >> stmp;
-		pts.resize(npts);
-		for (int i = 0; i < npts; i++)
-		{
-			fin >> pts[i].coor[0] >> pts[i].coor[1] >> dtmp;
-		}
-		getline(fin, stmp);
-		fin >> stmp >> neles >> itmp;
-		mesh.resize(neles);
-		for (int i = 0; i < neles; i++)
-		{
-			fin >> itmp >> mesh[i].IEN[0] >> mesh[i].IEN[1] >> mesh[i].IEN[2] >> mesh[i].IEN[3];
-			for (int j = 0; j < 4; j++)
-			{
-				mesh[i].pts[j][0] = pts[mesh[i].IEN[j]].coor[0];
-				mesh[i].pts[j][1] = pts[mesh[i].IEN[j]].coor[1];
-			}
-
-		}
-		for (int i = 0; i < neles + 5; i++) getline(fin, stmp);//skip lines
-		for (int i = 0; i < npts; i++)	fin >> pts[i].label;
-		fin.close();
-		PetscPrintf(PETSC_COMM_WORLD, "Mesh Loaded!\n");
-	}
-	else
-	{
-		PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
-	}
-
-}
-
-void UserSetting2D::ReadVelocityField(string fn, int npts, vector<array<double,2>>& velocity)
-{
-	string fname(fn);
-	ifstream fin;
-	fin.open(fname);
-	velocity.resize(npts);
-	if (fin.is_open())
-	{
-		for (int i = 0; i < npts; i++)
-		{
-			for(int j = 0; j < 2; j++)
-			{
-				fin >> velocity[i][0] >> velocity[i][1] >> velocity[i][2];
-			}
-			
-		}
-		fin.close();
-		PetscPrintf(PETSC_COMM_WORLD, "Velocity Field Loaded!\n");
-	}
-	else
-	{
-		PetscPrintf(PETSC_COMM_WORLD, "Cannot open %s!\n", fname.c_str());
-	}
-}
-
-void UserSetting2D::AssignProcessor(string fn, int &n_bzmesh, vector<vector<int>> &ele_process)
 {
 	int tmp;
 	int i = 0;

@@ -13,24 +13,11 @@
 
 using namespace std;
 
-const int degree = 3;
-// * Burger's equation
-// const int state_num = 2;
-// const int ctrl_num = 2;
-// const int result_num = 6;
-// * Diffusion equation and Convection-diffusion equation
-const int state_num = 1;
-const int ctrl_num = 1;
-const int result_num = 3;
-
-const int bzpt_num = 16;
-const int time_int = 0; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
-
-const int debug_rank = 0; // * For Parallel implementation debug
 
 class TransportOpt2D
 {
 private:
+
 	vector<double> Gpt;
 	vector<double> wght;
 	const double PI = 4 * atan(1.0);
@@ -91,7 +78,7 @@ private:
 	Vec Y_d;
 	Vec Y_ini, U_ini, L_ini; // Initial value in time space
 	Vec Y_k, U_k, L_k; // Initial value in iteration
-	Vec Res_nl;
+	Vec Res_Desire, Res_nl;
 
 	Vec dX;
 	Vec X, ResVec;
@@ -131,8 +118,6 @@ private:
 	void ComputeConvectMatrix(vector<double>& v, vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, vector<vector<double>>& ConvectMat);
 	void ComputeParMatrix(vector<double>& Nx, vector<array<double, dim>>& dNdx, const double detJ, int dir, vector<vector<double>>& ParMat);
 
-	void L2Projection(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, double detJ, vector<double>& Proj);
-	void L2Projection_Convection(const vector<double> w, vector<double> &Nx, vector<array<double, dim>> &dNdx, const vector<int> &IEN, double detJ, vector<double> &Proj);
 	void LocalL2Projection(int e, vector<double> w, vector<vector<double>> &u_proj);
 
 	void ComputeStableMatrix(const vector<double> val_ini[state_num], double h, vector<double> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<array<array<double, dim>, dim>> &dN2dx2, const double detJ, const vector<int> &IEN, vector<vector<double>> &StableMat);
@@ -140,14 +125,13 @@ private:
 	void ComputeStableMatrix_Convection2(const vector<double> w, double h, vector<vector<double>> wdNdx_proj, vector<double> &Nx, vector<array<double, dim>> &dNdx, vector<double> &Nx_disc, vector<array<double, dim>> &dNdx_disc, const double detJ, const double detJ_disc, const vector<int> &IEN, vector<vector<double>> &StableMat);
 
 	//void ComputeConvectionMatrix(vector<double>& Nx, vector<array<double, 3>>& dNdx, const double detJ, const vector<double> &U, vector<vector<double>> ConvectMat);
-	void ComputeResVector(const vector<double> val_ini[state_num], vector<double>& Nx, vector<array<double, dim>>& dNdx, const vector<int>& IEN, const double detJ, vector<double> &qtmp);
+	void ComputeResVector(const vector<int> bc_flag, const vector<double> w, const vector<double> val_ini[state_num], vector<double> &Nx, vector<array<double, dim>> &dNdx, const vector<int> &IEN, const double detJ, vector<double> &qtmp);
 
 	void ResnlAssembly(vector<double> Eqtmp, const vector<int>& IEN, Vec& Gqtmp);
 	void StableMatAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
 	void MatrixAssembly(vector<vector<double>>Emat, const vector<int>& IEN, Mat& Gmat);
 	void BuildLinearSystemProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[state_num], const vector<double> val_ini[state_num]);
-	void BuildResVectorProcess(const vector<Vertex2D>& cpts, const vector<double> val_bc[state_num], const vector<double> val_ini[state_num]);
-
+	void BuildResVectorProcess(const vector<Vertex2D> &cpts, const vector<double> val_bc[state_num], const vector<double> val_ini[state_num], const vector<int> bc_flag);
 
 	void GetMatrixPosition(int row, int n_var, int &i_point, int &i_var, int &i_tstep);
 	void FormMatrixA11(Mat M, Mat K, Mat &A);
@@ -165,6 +149,7 @@ private:
 	void TangentMatSetup();
 	void PCMatSetup();
 
+	void FormDesireVec(const UserSetting2D *ctx);
 	void FormResVecb1(Vec x);
 	void FormResVecb2(Vec x);
 	void FormResVecb3(Vec x);
@@ -181,7 +166,7 @@ private:
 	void DebugSubMat();
 
 	/*Postprocessing*/
-	void ResultCal_Bezier(double u, double v, int time, const Element2D& bzel, double pt[3], double result[result_num], double dudx[3], double& detJ);
+	void ResultCal_Bezier(double u, double v, int time, const Element2D& bzel, double pt[2], double result[result_num], double dudx[3], double& detJ);
 	void WriteVTK(const vector<array<double, 3>> pts, const vector<double> sdisp, const vector<array<int, 4>> sele, int time, int step, string fn);
 	void VisualizeVTK_PhysicalDomain(int time, int step, string fn);
 	void VisualizeVTK_ControlMesh(const vector<Vertex2D>& pts, const vector<Element2D>& mesh, int step, string fn);

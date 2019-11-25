@@ -12,8 +12,6 @@
 #include <cmath>
 using namespace std;
 
-const int dim = 2;
-
 const bool ReadIC = false;
 const bool ReadBC = false;
 const bool ReadDesire = false;
@@ -22,10 +20,26 @@ const bool VisualizeIC = true;
 const bool VisualizeBC = true;
 const bool VisualizeDesire = true;
 
-const int STATE_NUM = 1;
-const int CTRL_NUM = 1;
-const int RESULT_NUM = 1;
+const int dim = 2;
+const int degree = 3;
+const int bzpt_num = 16;
 
+// * Neuron Model equation
+// const int state_num = 7;
+// const int ctrl_num = 4;
+// const int result_num = 7;
+// * Burger's equation
+// const int state_num = 2;
+// const int ctrl_num = 2;
+// const int result_num = 6;
+// * Diffusion equation and Convection-diffusion equation
+const int state_num = 1;
+const int ctrl_num = 1;
+const int result_num = 3;
+
+const int time_int = 0; // * 0 - steady state; 1 - trapezoidal; 2 - rectangle
+
+const int debug_rank = 0; // * For Parallel implementation debug
 
 //problem setting
 class UserSetting2D
@@ -71,13 +85,6 @@ private:
 public:
 	UserSetting2D();
 	void InitializeUserSetting(string fn);
-
-
-
-	void SetVariables(string fn_par, vector<double> &var);
-	void SetInitialCondition(int ndof, vector<double> &Vel0, vector<double> &Pre0, vector<Vertex2D> &pts, const vector<array<double, 2>> velocity_node);
-	void ReadMesh(string fn, vector<Vertex2D> &pts, vector<Element2D> &mesh);
-	void ReadVelocityField(string fn, int npts, vector<array<double, 2>> &velocity);
-	void AssignProcessor(string fn, int &n_bzmesh, vector<vector<int>> &ele_process);
+	void DesireStateFunction(double x, double y, double z, double t, double result[state_num]) const; 
 };
 #endif

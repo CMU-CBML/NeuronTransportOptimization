@@ -28,14 +28,20 @@ CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX}
 
 all: neuron_opt
 
-neuron_opt: BasicDataStructure.o UserSetting2D.o TransportOpt2D.o main.o 
-	$(Compiler) BasicDataStructure.o UserSetting2D.o TransportOpt2D.o main.o -o neuron_opt ${PETSC_LIB} $(CFLAGS)
+neuron_opt: BasicDataStructure.o UserSetting2D.o Utils.o DiffConv2D.o TransportOpt2D.o main.o 
+	$(Compiler) BasicDataStructure.o UserSetting2D.o Utils.o DiffConv2D.o TransportOpt2D.o main.o -o neuron_opt ${PETSC_LIB} $(CFLAGS)
 	
 BasicDataStructure.o: BasicDataStructure.cpp
 	$(Compiler)	-c BasicDataStructure.cpp $(CFLAGS)
 	
 UserSetting2D.o: UserSetting2D.cpp
 	$(Compiler)	-c UserSetting2D.cpp $(CFLAGS)
+
+Utils.o: Utils.cpp
+	$(Compiler)	-c Utils.cpp $(CFLAGS)
+
+DiffConv2D.o: DiffConv2D.cpp
+	$(Compiler)	-c DiffConv2D.cpp $(CFLAGS)
 
 TransportOpt2D.o: TransportOpt2D.cpp
 	$(Compiler)	-c TransportOpt2D.cpp $(CFLAGS)
