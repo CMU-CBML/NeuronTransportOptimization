@@ -1,7 +1,8 @@
-#PETSC_DIR=/mnt/c/Users/LAR/Documents/GroupCode/lib/petsc
-# PETSC_DIR=~/Documents/petsc
-PETSC_DIR=/pylon5/eg560mp/angranl/lib/petsc
-
+# PETSC_DIR=~/Documents/lib/petsc
+# PETSC_DIR=/pylon5/eg560mp/angranl/lib/petsc
+# PETSC_DIR=/ocean/projects/eng170006p/angranl/lib/petsc
+PETSC_DIR=/ocean/projects/eng170006p/angranl/lib/petsc-3.15.0-gcc10.2
+# PETSC_ARCH = arch-debug-mpich
 # CLFAGS          =
 # FFLAGS	        =
 # CPPFLAGS        =
@@ -16,28 +17,34 @@ PETSC_DIR=/pylon5/eg560mp/angranl/lib/petsc
 
 include ${PETSC_DIR}/lib/petsc/conf/variables
 include ${PETSC_DIR}/lib/petsc/conf/rules
-include ${PETSC_DIR}/lib/petsc/conf/test
+# include ${PETSC_DIR}/lib/petsc/conf/test
 
-Compiler=mpiicpc
+# Compiler=mpiicpc
+# Compiler=${PETSC_DIR}/${PETSC_ARCH}/bin/mpicxx
+Compiler=mpicxx
+# Compiler=clang
 # Compiler=pgcc
 # Compiler=mpiicc
 # CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX} -Wall
-CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX}  -std=c++11 -qopenmp -Wall
+CFLAGS= ${PETSC_CC_INCLUDES} ${CXX_FLAGS} ${CXXFLAGS} ${CPPFLAGS}  ${PSOURCECXX} -std=c++11 -g -fopenmp -Wall
 #-D_GLIBCXX_USE_CXX11_ABI=0
 
 all: neuron_opt
 
-neuron_opt: BasicDataStructure.o UserSetting2D.o TransportOpt2D.o main.o 
-	$(Compiler) BasicDataStructure.o UserSetting2D.o TransportOpt2D.o main.o -o neuron_opt ${PETSC_LIB} $(CFLAGS)
-	
+neuron_opt: BasicDataStructure.o UserSetting2D.o Utils.o DiffConv2D.o main.o 
+	$(Compiler) BasicDataStructure.o UserSetting2D.o Utils.o DiffConv2D.o main.o -o neuron_opt ${PETSC_LIB} $(CFLAGS)
+
+Utils.o: Utils.cpp
+	$(Compiler)	-c Utils.cpp $(CFLAGS)
+
 BasicDataStructure.o: BasicDataStructure.cpp
 	$(Compiler)	-c BasicDataStructure.cpp $(CFLAGS)
 	
 UserSetting2D.o: UserSetting2D.cpp
 	$(Compiler)	-c UserSetting2D.cpp $(CFLAGS)
 
-TransportOpt2D.o: TransportOpt2D.cpp
-	$(Compiler)	-c TransportOpt2D.cpp $(CFLAGS)
+DiffConv2D.o: DiffConv2D.cpp
+	$(Compiler)	-c DiffConv2D.cpp $(CFLAGS)
 
 main.o: main.cpp
 	$(Compiler)	-c main.cpp $(CFLAGS)

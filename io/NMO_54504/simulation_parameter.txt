@@ -1,4 +1,4 @@
-D 0.02
+D 0.2
 Dplus 10.0
 Dminus 10.0
 vplus 1.0
@@ -12,7 +12,7 @@ mu 1.0
 alpha0 1.0
 alpha1 1.0
 alpha2 1.0
-beta1 0.0001
+beta1 0.001
 beta2 1.0
 dt 0.01
 nstep 1

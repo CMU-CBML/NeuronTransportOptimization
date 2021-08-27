@@ -2,7 +2,7 @@
 
 Vertex2D::Vertex2D()
 {
-	coor[0] = 0.;	coor[1] = 0.;
+	coor[0] = 0.;	coor[1] = 0.; coor[2] = 0.;
 	label = 0;
 }
 
@@ -10,13 +10,13 @@ Element2D::Element2D(int p)
 {
 	degree = p;
 	order = p + 1;
-	nbf = order*order*order;
+	nbf = order*order;
 	IEN.resize(4);
 	pts.resize(4);
 	for (int i = 0; i < 4; i++)
 	{
 		IEN[i] = 0;
-		pts[i][0] = 0.; pts[i][1] = 0.;
+		pts[i][0] = 0.; pts[i][1] = 0.; pts[i][2] = 0.;
 	}
 }
 
@@ -68,16 +68,17 @@ void Element2D::Basis(double u, double v, vector<double>& Nt, vector<array<doubl
 	}
 }
 
-void Element2D::Para2Phys(double u, double v, double pt[2]) const
+void Element2D::Para2Phys(double u, double v, double pt[3]) const
 {
 	vector<double> Nt;
 	vector<array<double, 2>> dNdt;
 	Basis(u, v, Nt, dNdt);
-	pt[0] = 0.; pt[1] = 0.;
+	pt[0] = 0.; pt[1] = 0.; pt[2] = 0.;
 	for (int i = 0; i<nbf; i++)
 	{
 		pt[0] += pts[i][0] * Nt[i];
 		pt[1] += pts[i][1] * Nt[i];
+		pt[2] += pts[i][2] * Nt[i];
 	}
 }
 

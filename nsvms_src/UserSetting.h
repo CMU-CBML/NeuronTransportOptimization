@@ -15,6 +15,9 @@ using namespace std;
 //problem setting
 class UserSetting
 {
+private:
+	static const int dim = 2;
+
 public:
 	UserSetting();
 	void SetVariables(string fn_par, vector<double> &var);

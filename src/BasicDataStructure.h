@@ -17,7 +17,7 @@ using namespace std;
 class Vertex2D
 {
 public:
-	double coor[2];
+	double coor[3];
 	int label; //ID for inlet and outlet
 	Vertex2D();	
 };
@@ -33,7 +33,7 @@ public:
 	int label;
 
 	vector<int> IEN;
-	vector<array<double, 2>> pts;//tmp
+	vector<array<double, 3>> pts;//tmp
 	vector<array<double, 16>> cmat;
 	vector<int> IDBC;
 	double velocity[3];
@@ -41,7 +41,7 @@ public:
 	Element2D(int p = 3);
 	void BezierPolyn(double u, vector<double>& Nu, vector<double>& dNdu) const;
 	void Basis(double u, double v, vector<double>& Nt, vector<array<double, 2>>& dNdt) const;
-	void Para2Phys(double u, double v, double pt[2]) const;
+	void Para2Phys(double u, double v, double pt[3]) const;
 
 };
 
