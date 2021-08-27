@@ -4,7 +4,7 @@ The package contains four subfolders for different stages of the simulation work
 User should follow the steps to finish the whole simulation workflow:
 
 1.meshgeneration (Matlab)
-(1) Description: this code is used to smooth the neuron skeleton and generate the hexahedral mesh for IGA simulation.
+(1) Description: this code is used to smooth the neuron skeleton and generate the quadrilateral mesh for IGA simulation.
 					 
 (2) Input: *.swc (neuron skeleton information)	
 		  mesh_parameter.txt (parameter settings for generating the mesh)
@@ -13,7 +13,7 @@ User should follow the steps to finish the whole simulation workflow:
 (3) To run: (i)download TREES_Toolbox from: http://www.treestoolbox.org/ and put it inside ./meshgeneration directory.
             (ii)use TreeSmooth.m as the code to smooth neuron skeleton and generate *_smooth.swc file.
 	        user need to set smooth parameters in mesh_parameter.txt and input/output path in TreeSmooth.m.
-            (iii)use Hexmesh_main.m as the code to generate the mesh using smoothed skeleton.
+            (iii)use main_quadmesh.m as the code to generate the mesh using smoothed skeleton.
 		    user need to set bifurcation refinement parameters in mesh_parameter.txt and input/output path in Hexmesh_main.m.
 (4) Notes: (i)The neuron skeleton dataset can be downloaded from NeuroMorpho.org: http://neuromorpho.org/	
 	         Before using the dataset, user needs to visualize the skeleton using TREES Toolbox and 
@@ -25,11 +25,12 @@ User should follow the steps to finish the whole simulation workflow:
 			 ratio_noisesmooth:  set noise smooth ratio, range: 0 to 1
 			 seg_length:         set the Bezier smooth segments length, the value mainly depends on the neuron scale
 			 ratio_refine:       set the parameter used to calculate the refinement around bifurcation region range: 0 to 1 
+			 n_sample: set the number of sample points to discretize spline curves 
 	  (iii)To obtain a good quality mesh, user needs to try several parameter settings for mesh generation. 
 	 	User is recommended to check the scaled Jacobian of the mesh in Paraview before using it in simulation. 
 		It's better to make sure the minimum scaled Jacobian is larger than 0.1.
 		  
-2.spline_src (C++)
+2.spline2D_src (C++)
 (1) Description: this code is used to construct B-spline and obtain Bezier extraction information for IGA based on the input control mesh.
 					 
 (2) Input: controlmesh.vtk (control mesh file)
@@ -39,8 +40,8 @@ User should follow the steps to finish the whole simulation workflow:
 		   
 (3) To compile: make (requires Eigen library: http://eigen.tuxfamily.org/index.php?title=Main_Page)
 
-(4) To run: ./spline meshfilepath (the path that contains the controlmesh.vtk)
-		example: ./spline ../example/bifurcation/
+(4) To run: ./spline <meshfilepath> (the path that contains the controlmesh.vtk)
+		example: ./spline ../io/single_pipe/
 		
 3.METIS (C++)
 (1) Description: The open source library METIS is used to partition the mesh for parallel computing.
@@ -52,25 +53,25 @@ User should follow the steps to finish the whole simulation workflow:
 		example: mpmetis ../example/bifurcation/bzmeshinfo.txt 28
 		
 4.nsvms_src (C++)
-(1) Description: this code is used to obtain velocity field by solving incompressible steady-state Navier-Stokes equation. 
+(1) Description: this code is used to obtain desired velocity field by solving incompressible steady-state Navier-Stokes equation. 
 		The code is paralleled using MPI to accelerate the computation.
 				
 (2) Input: controlmesh.vtk  (control mesh file)
 	  bzmeshinfo.txt.epart.nparts (mesh partition file)
 	  bzpt.txt & cmat.txt (Bezier extraction information)
 	  initial_velocity.txt (initial velocity information)
-	  simulation_parameter.txt (parameter settings for the model)
-  Output: controlmesh_VelocityPressure_0.vtk (Velocity field on control mesh for visualization)
+	  simulation_parameter_NS.txt (parameter settings for the model)
+  Output: controlmesh_VelocityPressure.vtk (Velocity field on control mesh for visualization)
 	  final_physics_VelocityPressureBezier.vtk (Velocity field in physical domain for visualization)
 	  velocityfield.txt (Velocity information for transport simulation)
 
-(3) To compile: make (requires petsc 3.6.1: https://www.mcs.anl.gov/petsc/)
+(3) To compile: make (requires PETSc: https://www.mcs.anl.gov/petsc/)
 
-(4) To run: mpiexec -np process_num ./nsvms meshfilepath process_num
-		example: mpiexec -np 28 ./nsvms ../example/bifurcation/ 28
+(4) To run: mpirun -np process_num ./nsvms -d 2 -i <meshfilepath> 
+		example: mpirun -np 28 ./nsvms -d 2 -i ../io/single_pipe/
 		
-5.transport_src (C++)
-(1) Description: this code is used to perform transport simulation and obtain concentration result.
+5.opt_src (C++)
+(1) Description: this code is used to perform transport simulation.
 		The code is paralleled using MPI to accelerate the computation. 
 				
 (2) Input: controlmesh.vtk  (control mesh file)
@@ -81,15 +82,12 @@ User should follow the steps to finish the whole simulation workflow:
    Output: controlmesh_allparticle_*.vtk (Concentration for visualization)
 	  the output path name is set using all parameters value
 			
-(3) To compile: make (requires petsc 3.6.1: https://www.mcs.anl.gov/petsc/)
+(3) To compile: make (requires PETSc: https://www.mcs.anl.gov/petsc/)
 
-(4) To run: mpiexec -np process_num ./transport meshfilepath process_num
-		example: mpiexec -np 28 ./transport ../example/bifurcation/ 28
+(4) To run: mpirun -np process_num ./neuron_opt -d 2 -i <meshfilepath> process_num
+		example: mpirun -np 28 ./neuron_opt -d 2 -i ../io/single_pipe/ 28
 
 The solver code uses parallel computation (MPI) to accelerate computation. 
-All result .vtk files are tested and can be opened in Paraview 5.4.0: https://www.paraview.org/
-
-In "./example" folder, we provide all the input files for generating the results in our paper. For the single bifurcation neurite model,
-we provide all the intermediate output files in "./example/bifurcation/". User can use this model to learn how to run the whole package.
+All result .vtk files are tested and can be opened in Paraview: https://www.paraview.org/
 
 

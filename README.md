@@ -6,3 +6,4 @@ NeuronTransportOpt is an isogeometric analysis (IGA) based PDE-constrained optim
 * *[Eigen](http://eigen.tuxfamily.org/index.php?title=Main_Page)*
 * *[METIS](http://glaros.dtc.umn.edu/gkhome/metis/metis/overview)*
 * *[PETSc](https://www.mcs.anl.gov/petsc/)*
+* *[NeuronTransportIGA](https://github.com/CMU-CBML/NeuronTransportIGA)*
